@@ -562,6 +562,7 @@ def build_petals():
 
 YEL = [(246, 200, 38), (242, 182, 28), (250, 214, 70), (236, 170, 24)]
 STEM = [(96, 86, 50), (82, 78, 46), (110, 96, 56)]
+LEAFG = [(84, 148, 62), (112, 170, 72), (64, 126, 58), (98, 160, 84)]
 
 
 def bezier(p0, p1, p2, n):
@@ -657,14 +658,138 @@ def build_forsythia(flowers_out, t0=23.6):
                 fy = y + math.sin(ang + math.pi / 2) * side * (6 + r.random() * 6)
                 if not in_text_zone(fx, fy):
                     flowers_out.append((fx, fy, t + 0.15 + r.random() * 0.2, 9 + r.random() * 7))
-            # 연둣빛 새잎 조금
-            if u > 0.6 and r.random() < 0.018:
-                la = ang + r.choice([-1, 1]) * (0.7 + r.random() * 0.4)
-                for j, seg in enumerate(leaf_poly(x, y, la, 26 + r.random() * 16, 8, nseg=3)):
-                    L.poly(t + 0.3 + j * 0.05, seg, (118, 152, 64), 0.8)
+            # 푸른 새잎: 꽃 사이사이로 돋아난다
+            if u > 0.3 and r.random() < 0.075:
+                la = ang + r.choice([-1, 1]) * (0.6 + r.random() * 0.5)
+                lx, ly = x + math.cos(la) * 3, y + math.sin(la) * 3
+                if not in_text_zone(lx + math.cos(la) * 30, ly + math.sin(la) * 30):
+                    lc = LEAFG[r.integers(0, len(LEAFG))]
+                    for j, seg in enumerate(leaf_poly(lx, ly, la, 30 + r.random() * 24, 10 + r.random() * 5, nseg=4)):
+                        L.poly(t + 0.35 + j * 0.05, seg, lc, 0.85)
         # 끝의 꽃송이
         flowers_out.append((end[0], end[1], t + 0.2, 10 + r.random() * 4))
     return L
+
+
+def make_wing(kind, r):
+    """오른쪽 날개 한 장 (앞날개+뒷날개), 몸통 기준선은 x=0. 4배 해상도."""
+    S = 4
+    Wd, Hd = 46 * S, 64 * S
+    im = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    cy = Hd * 0.42
+    if kind == "yellow":
+        base, edge, spot = (246, 206, 70), (60, 44, 30), (250, 236, 170)
+    elif kind == "white":
+        base, edge, spot = (250, 246, 232), (70, 66, 60), (236, 200, 90)
+    else:  # 청록 호랑나비 느낌
+        base, edge, spot = (88, 168, 160), (32, 40, 40), (236, 222, 170)
+    fore = [(0, cy), (Wd * 0.25, cy - Hd * 0.30), (Wd * 0.70, cy - Hd * 0.40), (Wd * 0.97, cy - Hd * 0.34),
+            (Wd * 0.90, cy - Hd * 0.12), (Wd * 0.55, cy + Hd * 0.02), (0, cy + Hd * 0.04)]
+    hind = [(0, cy + Hd * 0.02), (Wd * 0.55, cy + Hd * 0.04), (Wd * 0.78, cy + Hd * 0.20), (Wd * 0.64, cy + Hd * 0.42),
+            (Wd * 0.30, cy + Hd * 0.52), (Wd * 0.10, cy + Hd * 0.40), (0, cy + Hd * 0.18)]
+    d.polygon(hind, fill=edge + (235,))
+    d.polygon(fore, fill=edge + (240,))
+    # 안쪽 색면 (테두리를 남기고 축소)
+    def shrink(poly, k, ox=0.0):
+        cx_ = sum(p[0] for p in poly) / len(poly) + ox
+        cy_ = sum(p[1] for p in poly) / len(poly)
+        return [(cx_ + (x - cx_) * k, cy_ + (y - cy_) * k) for x, y in poly]
+    d.polygon(shrink(hind, 0.80), fill=base + (235,))
+    d.polygon(shrink(fore, 0.82), fill=base + (240,))
+    # 날개 맥
+    for a in (-0.9, -0.6, -0.35, -0.1):
+        d.line([(Wd * 0.04, cy), (Wd * 0.04 + math.cos(a) * Wd * 0.8, cy + math.sin(a) * Hd * 0.5)], fill=edge + (120,), width=S)
+    for a in (0.35, 0.75, 1.1):
+        d.line([(Wd * 0.04, cy + Hd * 0.05), (Wd * 0.04 + math.cos(a) * Wd * 0.6, cy + Hd * 0.05 + math.sin(a) * Hd * 0.42)], fill=edge + (110,), width=S)
+    # 가장자리 점무늬
+    for k in range(5):
+        u = (k + 0.5) / 5
+        px = Wd * (0.62 + 0.30 * u)
+        py = cy - Hd * (0.36 - 0.24 * u)
+        rr = S * 2.2
+        d.ellipse([px - rr, py - rr, px + rr, py + rr], fill=spot + (230,))
+    d.ellipse([Wd * 0.40 - S * 3, cy + Hd * 0.36 - S * 3, Wd * 0.40 + S * 3, cy + Hd * 0.36 + S * 3], fill=(214, 92, 50, 220))
+    im = im.filter(ImageFilter.GaussianBlur(S * 0.4))
+    return im.resize((Wd // S * 1, Hd // S * 1), Image.LANCZOS)
+
+
+class Butterfly:
+    def __init__(self, kind, t0, t1, path, flap_hz, scale, seed):
+        r = np.random.default_rng(seed)
+        self.wing = make_wing(kind, r)
+        scale *= 1.35
+        if scale != 1:
+            self.wing = self.wing.resize((int(self.wing.size[0] * scale), int(self.wing.size[1] * scale)), Image.LANCZOS)
+        self.t0, self.t1 = t0, t1
+        self.path = path
+        self.hz = flap_hz
+        self.ph = r.random() * math.tau
+        self.scale = scale
+
+    def pos(self, t):
+        x, y = self.path(t - self.t0)
+        # 날갯짓에 맞춘 작은 상하 흔들림
+        y += 5 * self.scale * math.sin(self.hz * math.tau * t + self.ph)
+        return x, y
+
+    def draw(self, canvas, t):
+        if t < self.t0 or t > self.t1:
+            return
+        x, y = self.pos(t)
+        x2, y2 = self.pos(t + 0.08)
+        heading = math.atan2(y2 - y, x2 - x)
+        # 날갯짓: 가끔 활공(날개를 펴고 멈춤)
+        f = math.sin(self.hz * math.tau * t + self.ph)
+        glide = 0.5 + 0.5 * math.sin(t * 0.9 + self.ph)
+        open_ = 0.18 + 0.82 * (abs(f) if glide < 0.75 else 0.85 + 0.15 * abs(f))
+        ww, wh = self.wing.size
+        nw = max(2, int(ww * open_))
+        right = self.wing.resize((nw, wh), Image.BILINEAR)
+        left = right.transpose(Image.FLIP_LEFT_RIGHT)
+        body_w = max(3, int(5 * self.scale))
+        fr = Image.new("RGBA", (nw * 2 + body_w, wh), (0, 0, 0, 0))
+        fr.alpha_composite(left, (0, 0))
+        fr.alpha_composite(right, (nw + body_w, 0))
+        d = ImageDraw.Draw(fr)
+        cx = nw + body_w / 2
+        d.ellipse([cx - body_w / 2, wh * 0.28, cx + body_w / 2, wh * 0.72], fill=(40, 32, 28, 255))
+        d.ellipse([cx - body_w * 0.6, wh * 0.22, cx + body_w * 0.6, wh * 0.32], fill=(40, 32, 28, 255))
+        # 더듬이
+        d.line([(cx, wh * 0.24), (cx - wh * 0.14, wh * 0.04)], fill=(40, 32, 28, 230), width=1)
+        d.line([(cx, wh * 0.24), (cx + wh * 0.14, wh * 0.04)], fill=(40, 32, 28, 230), width=1)
+        ang = -math.degrees(heading) - 90  # 머리(위쪽)가 진행 방향을 보도록
+        im = fr.rotate(ang, Image.BICUBIC, expand=True)
+        a = sstep(self.t0, self.t0 + 0.6, t) * (1 - sstep(self.t1 - 0.6, self.t1, t))
+        if a < 0.999:
+            arr = np.asarray(im).copy()
+            arr[..., 3] = (arr[..., 3] * a).astype(np.uint8)
+            im = Image.fromarray(arr, "RGBA")
+        canvas.alpha_composite(im, (int(x - im.size[0] / 2), int(y - im.size[1] / 2)))
+
+
+def build_butterflies():
+    B = []
+    # 1) 노랑나비: 오른쪽 위에서 들어와 위쪽을 가로지른다
+    B.append(Butterfly("yellow", 23.4, 39.6,
+                       lambda d: (2000 - 120 * d + 60 * math.sin(d * 0.9), 210 + 70 * math.sin(d * 0.7 + 1) + 30 * math.sin(d * 2.1)),
+                       7.5, 1.0, 1))
+    # 2) 흰나비: 왼쪽 개나리 주변을 맴돈다
+    B.append(Butterfly("white", 24.2, 39.6,
+                       lambda d: (300 + 190 * math.sin(d * 0.55) + 40 * math.sin(d * 1.7), 560 + 150 * math.sin(d * 0.8 + 0.5) + 30 * math.sin(d * 2.3)),
+                       8.5, 0.85, 2))
+    # 3) 청록 나비: 아래쪽에서 오른쪽 개나리로
+    B.append(Butterfly("teal", 25.0, 39.6,
+                       lambda d: (-60 + 140 * d - 25 * d * d * 0.0 + 50 * math.sin(d * 1.1), 980 - 34 * d + 40 * math.sin(d * 1.4)),
+                       6.5, 1.15, 3))
+    # 4) 작은 노랑나비 한 쌍: 오른쪽 개나리 근처에서 서로 쫓듯이
+    B.append(Butterfly("yellow", 27.0, 39.6,
+                       lambda d: (1680 + 150 * math.sin(d * 0.7), 640 + 160 * math.sin(d * 1.05 + 2) + 20 * math.sin(d * 3)),
+                       9.0, 0.7, 4))
+    B.append(Butterfly("white", 27.4, 39.6,
+                       lambda d: (1700 + 150 * math.sin(d * 0.7 - 0.6), 660 + 160 * math.sin(d * 1.05 + 1.4) + 20 * math.sin(d * 2.6)),
+                       9.5, 0.65, 5))
+    return B
 
 
 def build_sun():
@@ -875,6 +1000,7 @@ class Scene:
         rr = np.random.default_rng(31)
         self.yflowers = [dict(x=x, y=y, t=t, spr=make_forsythia_sprite(R, rr)) for (x, y, t, R) in self.yflowers]
         self.sun = build_sun()
+        self.butterflies = build_butterflies()
         ry = np.random.default_rng(99)
         self.ypetals = []
         for i in range(34):
@@ -1081,6 +1207,8 @@ class Scene:
             canvas.alpha_composite(im, (int(b["x"] + fdx - im.size[0] / 2), int(b["y"] - im.size[1] / 2)))
         canvas = self.camera(canvas, t)
         self.draw_petals(canvas, t, self.ypetals)
+        for bf in self.butterflies:
+            bf.draw(canvas, t)
         self.draw_dust(canvas, t)
         return canvas
 
