@@ -48,6 +48,9 @@ MINT = (96, 226, 196)
 PINK = (255, 150, 200)
 SKY = (120, 190, 255)
 NAVY = (30, 36, 84)
+GOLD_T = (196, 136, 22)
+MINT_T = (14, 140, 118)
+CORAL_T = (220, 64, 72)
 
 
 def lerp(a, b, k):
@@ -186,6 +189,7 @@ def build_city():
         wT = Image.new("F", (WW, H), 999.0)
         wC = Image.new("RGB", (WW, H), (0, 0, 0))
         dT, dC = ImageDraw.Draw(wT), ImageDraw.Draw(wC)
+        snowcaps = []
         x = -40
         while x < WW + 40:
             bw = r.uniform(*wr)
@@ -194,6 +198,7 @@ def build_city():
             kind = r.choice(["flat", "step", "slant", "dome", "spire"], p=[0.35, 0.25, 0.15, 0.1, 0.15])
             pts = [(x, base + 200), (x, top), (x + bw, top), (x + bw, base + 200)]
             d.polygon([(px * S, py * S) for px, py in pts], fill=255)
+            snowcaps.append((x, top, bw))
             if kind == "step":
                 d.rectangle([(x + bw * 0.2) * S, (top - bh * 0.14) * S, (x + bw * 0.8) * S, top * S], fill=255)
             elif kind == "slant":
@@ -212,26 +217,31 @@ def build_city():
                         if r.random() > lit_p:
                             continue
                         tt = 0.7 + abs((xx - WW * 0.32) / WW) * 3.0 + (base - yy) / 900 + r.random() * 0.5
-                        if warm:
-                            c = (255, int(r.uniform(196, 226)), int(r.uniform(120, 160)))
+                        if r.random() < 0.7:
+                            c = (int(r.uniform(226, 244)), int(r.uniform(238, 248)), 255)   # 유리창 반사
                         else:
-                            c = (int(r.uniform(170, 210)), int(r.uniform(214, 236)), 255)
-                        if r.random() < 0.06:
-                            c = (255, 150, 170)
+                            c = (255, int(r.uniform(232, 246)), int(r.uniform(196, 220)))   # 따뜻한 실내등
+                        if r.random() < 0.05:
+                            c = (255, 214, 220)
                         dT.rectangle([xx, yy, xx + ww_, yy + wh_], fill=float(tt))
                         dC.rectangle([xx, yy, xx + ww_, yy + wh_], fill=c)
             x += bw + r.uniform(-8, 14)
         m = np.asarray(mask.resize((WW, H), Image.BOX), np.float32) / 255
+        cap = Image.new("L", (WW * S, H * S), 0)
+        dcap = ImageDraw.Draw(cap)
+        for (cx_, ct, cw_) in snowcaps:
+            dcap.rounded_rectangle([(cx_ - 2) * S, (ct - 5) * S, (cx_ + cw_ + 2) * S, (ct + 4) * S], radius=4 * S, fill=255)
+        capm = np.asarray(cap.resize((WW, H), Image.BOX), np.float32) / 255 * m.clip(0, 1) ** 0 
         T = np.asarray(wT, np.float32)
         C = np.asarray(wC, np.float32) / 255
         lit = (T < 900).astype(np.float32)
         glow = np.asarray(Image.fromarray((lit * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(9)), np.float32) / 255
-        layers.append(dict(mask=m, T=T, C=C, glow=glow, depth=[0.3, 0.6, 1.0][li], has_win=wins))
+        layers.append(dict(mask=m, cap=capm, T=T, C=C, glow=glow, depth=[0.3, 0.6, 1.0][li], has_win=wins))
     return layers
 
 
-CITY_NIGHT = [(56, 54, 118), (36, 38, 92), (22, 24, 62)]
-CITY_DAWN = [(222, 160, 186), (164, 118, 166), (98, 76, 132)]
+CITY_NIGHT = [(222, 230, 244), (196, 210, 232), (164, 182, 214)]  # 밝은 낮 도시
+CITY_DAWN = [(246, 220, 226), (226, 196, 214), (196, 168, 200)]
 
 
 def pan(t):
@@ -331,8 +341,8 @@ class Scene:
             self.snow.append(dict(x=r.random() * W, y=r.random() * H, v=[34, 60, 105][dep] * (0.8 + 0.4 * r.random()),
                                   amp=10 + 25 * r.random(), fr=0.15 + 0.3 * r.random(), ph=r.random() * math.tau,
                                   dep=dep))
-        self.snow_spr = [soft_dot(1.6, (255, 255, 255), 0.5), soft_dot(2.8, (255, 255, 255), 0.4),
-                         soft_dot(5.0, (255, 255, 255), 0.1)]
+        self.snow_spr = [soft_dot(1.8, (255, 255, 255), 0.6), soft_dot(3.0, (255, 255, 255), 0.5),
+                         soft_dot(5.5, (250, 252, 255), 0.2)]
         # 트리 (빛 점으로 쌓이는 기하학 트리)
         self.tree = []
         cx, base, top = 470, 905, 330
@@ -414,40 +424,40 @@ class Scene:
         # 카운트다운 숫자
         self.count = []
         for k, ch in enumerate("54321"):
-            im, _ = shadowize(render_line(self.fonts, [(ch, WHITE)], "mont", 300, 0), blur=12, opacity=0.5, off=(0, 8))
+            im, _ = shadowize(render_line(self.fonts, [(ch, NAVY)], "mont", 300, 0), col=(255, 255, 255), blur=14, opacity=0.9, off=(0, 0))
             self.count.append((T_COUNT + k * 2 * BEAT, im))
         self.texts = self.build_texts()
         print("준비 완료", flush=True)
 
     def T(self, segs, font, size, sp=0, shadow=True):
         ln = render_line(self.fonts, segs, font, size, sp)
-        return shadowize(ln) if shadow else ln
+        return shadowize(ln, col=(255, 255, 255), blur=9, opacity=0.9, off=(0, 0)) if shadow else ln
 
     def build_texts(self):
         T = []
         rx = 960
         # 크리스마스
-        T.append(KText(self.T([("Merry", WHITE)], "mont", 140, 2), rx, 350, 5.0, 12.0, mode="pop", stagger=0.07, d_in=0.55))
-        T.append(KText(self.T([("Christmas", GOLD)], "mont", 140, 2), rx, 490, 5.5, 12.1, mode="pop", stagger=0.06, d_in=0.55,
+        T.append(KText(self.T([("Merry", NAVY)], "mont", 140, 2), rx, 350, 5.0, 12.0, mode="pop", stagger=0.07, d_in=0.55))
+        T.append(KText(self.T([("Christmas", GOLD_T)], "mont", 140, 2), rx, 490, 5.5, 12.1, mode="pop", stagger=0.06, d_in=0.55,
                        shimmer=((8.5, 1.0),)))
-        T.append(KText(self.T([("행복이 가득한 크리스마스 되세요", WHITE)], "bold", 44, 1), rx, 610, 7.0, 12.2))
-        T.append(KText(self.T([("따뜻하고 포근한 ", WHITE), ("성탄절", CORAL)], "black", 66, 1), rx, 420, 12.8, 19.8, mode="pop", stagger=0.05))
-        T.append(KText(self.T([("사랑하는 사람들과 웃음 가득한 하루 보내세요", WHITE)], "bold", 40, 1), rx, 520, 13.6, 19.9))
-        T.append(KText(self.T([("올 한 해 ", WHITE), ("신길튼튼365정형외과", MINT), ("와", WHITE)], "black", 54, 1), rx, 420, 20.4, 27.2, mode="pop", stagger=0.04))
-        T.append(KText(self.T([("함께해 주셔서 진심으로 ", WHITE), ("감사합니다", GOLD)], "black", 54, 1), rx, 512, 21.0, 27.3, mode="pop", stagger=0.04))
-        T.append(KText(self.T([("여러분의 건강한 웃음이 저희의 가장 큰 기쁨입니다", WHITE)], "bold", 36, 1), rx, 600, 22.2, 27.4))
+        T.append(KText(self.T([("행복이 가득한 크리스마스 되세요", NAVY)], "bold", 44, 1), rx, 610, 7.0, 12.2))
+        T.append(KText(self.T([("따뜻하고 포근한 ", NAVY), ("성탄절", CORAL_T)], "black", 66, 1), rx, 420, 12.8, 19.8, mode="pop", stagger=0.05))
+        T.append(KText(self.T([("사랑하는 사람들과 웃음 가득한 하루 보내세요", NAVY)], "bold", 40, 1), rx, 520, 13.6, 19.9))
+        T.append(KText(self.T([("올 한 해 ", NAVY), ("신길튼튼365정형외과", MINT_T), ("와", NAVY)], "black", 54, 1), rx, 420, 20.4, 27.2, mode="pop", stagger=0.04))
+        T.append(KText(self.T([("함께해 주셔서 진심으로 ", NAVY), ("감사합니다", GOLD_T)], "black", 54, 1), rx, 512, 21.0, 27.3, mode="pop", stagger=0.04))
+        T.append(KText(self.T([("여러분의 건강한 웃음이 저희의 가장 큰 기쁨입니다", NAVY)], "bold", 36, 1), rx, 600, 22.2, 27.4))
         # 새해
-        T.append(KText(self.T([("Happy New Year", WHITE)], "mont", 124, 2), 960, 320, T_DROP + 0.25, 43.6, mode="pop", stagger=0.05, d_in=0.5))
-        T.append(KText(self.T([("2027", GOLD)], "mont", 240, 6), 960, 525, T_DROP - 0.02, 43.7, mode="pop", stagger=0.08, d_in=0.6,
+        T.append(KText(self.T([("Happy New Year", NAVY)], "mont", 124, 2), 960, 320, T_DROP + 0.25, 43.6, mode="pop", stagger=0.05, d_in=0.5))
+        T.append(KText(self.T([("2027", GOLD_T)], "mont", 240, 6), 960, 525, T_DROP - 0.02, 43.7, mode="pop", stagger=0.08, d_in=0.6,
                        shimmer=((36.0, 1.2), (40.5, 1.2))))
-        T.append(KText(self.T([("새해 ", WHITE), ("복", CORAL), (" 많이 받으세요", WHITE)], "black", 72, 2), 960, 715, T_DROP + 1.6, 43.8, mode="pop", stagger=0.06))
+        T.append(KText(self.T([("새해 ", NAVY), ("복", CORAL_T), (" 많이 받으세요", NAVY)], "black", 72, 2), 960, 715, T_DROP + 1.6, 43.8, mode="pop", stagger=0.06))
         # 일출
         lite = lambda ln: shadowize(ln, col=(255, 255, 255), blur=8, opacity=0.8, off=(0, 0))
         T.append(KText(lite(render_line(self.fonts, [("2027년, 늘 ", NAVY), ("건강", (12, 150, 128)), ("하고 ", NAVY), ("행복", (232, 128, 20)), ("한 한 해 되세요", NAVY)], "black", 62, 1)),
                        960, 300, 45.2, 52.0, mode="pop", stagger=0.04))
         T.append(KText(lite(render_line(self.fonts, [("더 친절하게, 더 튼튼하게 곁에 있겠습니다", NAVY)], "bold", 40, 1)), 960, 395, 46.2, 52.1))
         # 엔딩 (유리 패널 위)
-        T.append(KText(render_line(self.fonts, [("Merry Christmas & Happy New Year", CORAL)], "script", 60, 1), 960, 400, T_END + 0.5, 99, d_in=0.8, stagger=0.025))
+        T.append(KText(render_line(self.fonts, [("Merry Christmas & Happy New Year", CORAL_T)], "script", 60, 1), 960, 400, T_END + 0.5, 99, d_in=0.8, stagger=0.025))
         T.append(KText(render_line(self.fonts, [("신길튼튼365정형외과", NAVY)], "black", 92, 1), 960, 515, T_END + 1.1, 99, mode="pop", stagger=0.05,
                        shimmer=((55.6, 1.2),)))
         T.append(KText(render_line(self.fonts, [("서울특별시 영등포구 가마산로 483  3A01호~3A05호", (70, 76, 120))], "reg", 32, 1), 960, 612, T_END + 2.0, 99))
@@ -457,9 +467,9 @@ class Scene:
     # ---------------- 배경 (하늘 + 도시)
     def background(self, t):
         dawn = sstep(T_DAWN - 0.5, T_DAWN + 5.5, t)
-        top = lerpc(lerpc((10, 14, 42), (14, 16, 48), sstep(T_COUNT, T_DROP, t)), (104, 168, 236), dawn)
-        bot = lerpc((78, 48, 128), (255, 196, 160), dawn)
-        mid = lerpc((36, 30, 86), (196, 186, 230), dawn)
+        top = lerpc((150, 196, 238), (150, 186, 236), dawn)
+        bot = lerpc((255, 246, 236), (255, 214, 196), dawn)
+        mid = lerpc((222, 236, 250), (240, 220, 236), dawn)
         y = self.yy
         k1 = np.clip(y / 0.6, 0, 1)
         k2 = np.clip((y - 0.6) / 0.4, 0, 1)
@@ -470,11 +480,11 @@ class Scene:
         if mo > 0.01:
             mx, my = 1580, 200
             g = self.halo[H - my:2 * H - my, W - mx:2 * W - mx]
-            img += g[..., None] * np.array([0.25, 0.22, 0.35], np.float32) * mo
+            img += g[..., None] * np.array([0.10, 0.09, 0.05], np.float32) * mo
             dd = np.hypot(self.gx_full[110:290, 1490:1670] - mx, self.gy_full[110:290, 1490:1670] - my)
             a = smoothstep(72, 68, dd) * mo
             sub = img[110:290, 1490:1670]
-            sub[:] = sub * (1 - a[..., None]) + np.array([1.0, 0.97, 0.88], np.float32) * a[..., None]
+            sub[:] = sub * (1 - a[..., None] * 0.85) + np.array([1.0, 0.99, 0.94], np.float32) * a[..., None] * 0.85
         if dawn > 0.01:
             sy = int(lerp(1060, 600, ease_out_cubic((t - T_DAWN) / 7.0)))
             g = self.halo_big[H - sy:2 * H - sy, W - 960:2 * W - 960]
@@ -497,8 +507,12 @@ class Scene:
                 m = np.vstack([np.zeros((dy, W), np.float32), m[:H - dy]])
             img *= 1 - m[..., None]
             img += m[..., None] * col
+            cp = L["cap"][:, off:off + W]
+            if dy > 0:
+                cp = np.vstack([np.zeros((dy, W), np.float32), cp[:H - dy]])
+            img += (1 - img) * cp[..., None] * 0.92
             if L["has_win"]:
-                on = (1 - sstep(T_DAWN + 1.0, T_DAWN + 6.0, t))
+                on = 1.0
                 if on > 0.01:
                     T = L["T"][:, off:off + W]
                     C = L["C"][:, off:off + W]
@@ -507,11 +521,11 @@ class Scene:
                         T = np.vstack([np.full((dy, W), 999, np.float32), T[:H - dy]])
                         C = np.vstack([np.zeros((dy, W, 3), np.float32), C[:H - dy]])
                         G = np.vstack([np.zeros((dy, W), np.float32), G[:H - dy]])
-                    lit = smoothstep(0, 0.25, t - T) * on
+                    lit = smoothstep(0, 0.25, t - T) * on * 0.75
                     img = img * (1 - lit[..., None]) + C * lit[..., None]
-                    img += G[..., None] * np.array([0.30, 0.22, 0.12], np.float32) * on * sstep(0.8, 3.5, t) * 0.6
+                    pass
         # 카운트다운 중 살짝 어둡게
-        dim = sstep(T_COUNT - 0.6, T_COUNT, t) * (1 - sstep(T_DROP, T_DROP + 0.4, t)) * 0.35
+        dim = sstep(T_COUNT - 0.6, T_COUNT, t) * (1 - sstep(T_DROP, T_DROP + 0.4, t)) * 0.0
         if dim > 0:
             img *= 1 - dim
         return np.clip(img, 0, 1)
@@ -582,7 +596,7 @@ class Scene:
                     dot(f["x"], f["y"], 14 * (1 - dt / 0.15), WHITE, 1)
         g1 = half.filter(ImageFilter.GaussianBlur(4)).resize((W, H), Image.BILINEAR)
         g2 = half.filter(ImageFilter.GaussianBlur(14)).resize((W, H), Image.BILINEAR)
-        out = (np.asarray(core, np.float32) * 0.9 + np.asarray(g1, np.float32) * 1.4 + np.asarray(g2, np.float32) * 1.2) / 255
+        out = (np.asarray(core, np.float32) * 1.25 + np.asarray(g1, np.float32) * 0.7 + np.asarray(g2, np.float32) * 0.35) / 255
         return out
 
     def camera(self, canvas, t):
@@ -599,8 +613,12 @@ class Scene:
     def frame(self, t):
         img = self.background(t)
         # 별
-        night = 1 - sstep(T_DAWN - 0.5, T_DAWN + 4, t)
-        img += self.lights(t)
+        night = 0.0
+        Lg = self.lights(t)
+        la = np.clip(Lg.max(axis=2, keepdims=True) * 1.15, 0, 1)
+        lc = Lg / np.maximum(Lg.max(axis=2, keepdims=True), 1e-3)
+        lc = np.clip(lc * 0.92, 0, 1)
+        img = img * (1 - la * 0.92) + lc * la * 0.92
         canvas = Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8), "RGB").convert("RGBA")
         if night > 0.01:
             for (x, y, ph, sp, k) in self.stars:
@@ -616,10 +634,10 @@ class Scene:
             canvas.alpha_composite(fade(im, tf), (int(st["x"] - pan(t) - im.size[0] / 2), int(st["y"] - im.size[1] / 2)))
         # 새벽 구름 / 새
         dawn = sstep(T_DAWN, T_DAWN + 4, t)
+        for c in self.clouds:
+            x = (c["x"] - t * c["v"]) % (W + 500) - 400
+            canvas.alpha_composite(fade(c["img"], 0.85 * sstep(0.3, 1.5, t)), (int(x), int(c["y"])))
         if dawn > 0.01:
-            for c in self.clouds:
-                x = c["x"] - (t - T_DAWN) * c["v"]
-                canvas.alpha_composite(fade(c["img"], dawn * 0.9), (int(x), int(c["y"])))
             d = ImageDraw.Draw(canvas)
             for b in self.birds:
                 tt = t - T_DAWN - 1.5
@@ -649,7 +667,7 @@ class Scene:
             for f in self.snow:
                 y = (f["y"] + f["v"] * t) % (H + 40) - 20
                 x = (f["x"] + f["amp"] * math.sin(f["fr"] * math.tau * t + f["ph"]) - pan(t) * 0.2 * (f["dep"] + 1)) % W
-                canvas.alpha_composite(fade(self.snow_spr[f["dep"]], sf * (0.55 + 0.2 * f["dep"])), (int(x), int(y)))
+                canvas.alpha_composite(fade(self.snow_spr[f["dep"]], sf * (0.8 + 0.1 * f["dep"])), (int(x), int(y)))
         # 컨페티
         for c in self.confetti:
             dt = t - c["t0"]
