@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """신길튼튼365정형외과 확장 이전 · 감사 인사 영상 (수묵 모션그래픽)
 
-1920x1080 · 30fps · 30초. 홍매화와 청록 대나무가 먹 번짐과 함께 그려지고,
+1920x1080 · 30fps · 60초. 홍매화와 청록 대나무가 먹 번짐과 함께 그려지고,
 꽃잎이 흩날리며 문구가 부드럽게 전환된다.
 
 사용:  python3 render.py --fonts <폰트폴더> --out <출력.mp4> [--preview 초,초,...]
@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 W, H = 1920, 1080
 FPS = 30
-DUR = 30.0
+DUR = 60.0
 NFRAMES = int(FPS * DUR)
 SS = 2  # 회화 레이어 슈퍼샘플링 배율
 LM = 60  # 회화 레이어 여백 (시차 이동용)
@@ -519,12 +519,13 @@ def build_inkdrop():
 
 # ---------------------------------------------------------------- 꽃잎
 
-def make_petal_sprite(size, r):
+def make_petal_sprite(size, r, palette=None):
     S = 4
     w, h = int(size * S), int(size * 0.8 * S)
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    col = [(204, 40, 70), (222, 72, 98), (190, 28, 58)][r.integers(0, 3)]
+    pal = palette or [(204, 40, 70), (222, 72, 98), (190, 28, 58)]
+    col = pal[r.integers(0, len(pal))]
     for j, (sc, al) in enumerate([(1.0, 190), (0.78, 90), (0.5, 60)]):
         ex, ey = w * (1 - sc) / 2, h * (1 - sc) / 2
         cc = tuple(min(255, v + j * 22) for v in col)
@@ -537,12 +538,12 @@ def make_petal_sprite(size, r):
 def build_petals():
     r = np.random.default_rng(88)
     P = []
-    n = 46
+    n = 84
     for i in range(n):
         fg = i < 5
         size = (44 + r.random() * 18) if fg else (13 + r.random() * 14)
         P.append(dict(
-            t0=2.2 + (i / n) * 26 + r.random() * 1.5 - (6 if fg else 0) * 0,
+            t0=2.2 + (i / n) * (DUR - 4) + r.random() * 1.5,
             x0=-120 + r.random() * 1000, y0=-60 + r.random() * 380,
             vx=55 + r.random() * 70, vy=38 + r.random() * 46,
             amp=22 + r.random() * 45, fr=0.25 + r.random() * 0.35, ph=r.random() * math.tau,
@@ -550,10 +551,128 @@ def build_petals():
             spr=make_petal_sprite(size, r), fg=fg,
         ))
         if fg:
-            P[-1]["t0"] = 4 + i * 5.5
+            P[-1]["t0"] = 4 + i * 11
             P[-1]["vx"] *= 1.6
             P[-1]["vy"] *= 1.3
     return P
+
+
+
+# ---------------------------------------------------------------- 노란 개나리 (중간 장면)
+
+YEL = [(246, 200, 38), (242, 182, 28), (250, 214, 70), (236, 170, 24)]
+STEM = [(96, 86, 50), (82, 78, 46), (110, 96, 56)]
+
+
+def bezier(p0, p1, p2, n):
+    out = []
+    for i in range(n + 1):
+        u = i / n
+        x = (1 - u) ** 2 * p0[0] + 2 * (1 - u) * u * p1[0] + u * u * p2[0]
+        y = (1 - u) ** 2 * p0[1] + 2 * (1 - u) * u * p1[1] + u * u * p2[1]
+        out.append((x, y))
+    return out
+
+
+def make_forsythia_sprite(R, r):
+    S = 4
+    size = int(R * 2.8)
+    im = Image.new("RGBA", (size * S, size * S), (0, 0, 0, 0))
+    c = size * S / 2
+    base = r.random() * math.tau
+    col = YEL[r.integers(0, len(YEL))]
+    for k in range(4):
+        lay = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(lay)
+        a = base + k * math.tau / 4 + r.normal() * 0.15
+        L = R * (0.95 + 0.2 * r.random()) * S
+        wd = R * 0.36 * S
+        # 길쭉한 꽃잎: 중심에서 바깥으로
+        pts = []
+        for j in range(13):
+            u = j / 12
+            w = wd * math.sin(math.pi * min(1, u * 1.05)) ** 0.8
+            px = c + math.cos(a) * L * u
+            py = c + math.sin(a) * L * u
+            pts.append((px + math.cos(a + math.pi / 2) * w, py + math.sin(a + math.pi / 2) * w))
+        for j in range(12, -1, -1):
+            u = j / 12
+            w = wd * math.sin(math.pi * min(1, u * 1.05)) ** 0.8
+            px = c + math.cos(a) * L * u
+            py = c + math.sin(a) * L * u
+            pts.append((px - math.cos(a + math.pi / 2) * w, py - math.sin(a + math.pi / 2) * w))
+        d.polygon(pts, fill=col + (215,))
+        # 꽃잎 결 (가운데 진한 선)
+        d.line([(c, c), (c + math.cos(a) * L * 0.7, c + math.sin(a) * L * 0.7)], fill=(214, 140, 20, 160), width=max(1, S))
+        im = Image.alpha_composite(im, lay)
+    d = ImageDraw.Draw(im)
+    cr = R * 0.18 * S
+    d.ellipse([c - cr, c - cr, c + cr, c + cr], fill=(200, 120, 20, 230))
+    im = im.resize((size, size), Image.LANCZOS)
+    return np.asarray(im, np.float32) / 255
+
+
+def build_forsythia(flowers_out, t0=23.6):
+    L = Layer("forsythia")
+    r = np.random.default_rng(2026)
+    stems = []
+    # 오른쪽 위에서 늘어지는 줄기들
+    for k in range(9):
+        o = (1990 + r.normal() * 20, -30 + r.random() * 60)
+        end = (1470 + r.random() * 380, 300 + r.random() * 760)
+        ctrl = (o[0] - 320 - r.random() * 260, o[1] + 40 + r.random() * 160)
+        if end[0] < 1500 and end[1] < 800:
+            end = (1520 + r.random() * 200, end[1])
+        stems.append((o, ctrl, end, t0 + 0.2 + k * 0.22))
+    # 왼쪽 아래에서 솟아 휘어지는 줄기들
+    for k in range(9):
+        o = (-30 + r.random() * 40, 1110)
+        if k < 5:
+            end = (250 + r.random() * 210, 430 + r.random() * 330)
+            ctrl = (60 + r.random() * 260, 40 + r.random() * 260)
+        else:
+            end = (520 + r.random() * 520, 900 + r.random() * 120)
+            ctrl = (300 + r.random() * 200, 640 + r.random() * 140)
+        stems.append((o, ctrl, end, t0 + 0.6 + k * 0.2))
+    for (o, ctrl, end, ts) in stems:
+        n = int(math.dist(o, ctrl) + math.dist(ctrl, end)) // 3
+        pts = bezier(o, ctrl, end, max(10, n))
+        speed = 480
+        t = ts
+        col = STEM[r.integers(0, len(STEM))]
+        prev = pts[0]
+        total = len(pts)
+        for i, (x, y) in enumerate(pts):
+            u = i / total
+            t += math.dist(prev, (x, y)) / speed
+            prev = (x, y)
+            w = 8.5 * (1 - u) + 2.0
+            L.dab(t, x + r.normal() * 0.3, y + r.normal() * 0.3, w / 2, col, 0.9)
+            if 0 < i < total - 1:
+                ang = math.atan2(pts[i + 1][1] - y, pts[i + 1][0] - x)
+            # 꽃: 줄기를 따라 촘촘히 (개나리는 잎보다 꽃이 먼저)
+            if u > 0.22 and i % 6 == 0 and r.random() < 0.8:
+                side = r.choice([-1, 1])
+                fx = x + math.cos(ang + math.pi / 2) * side * (6 + r.random() * 6)
+                fy = y + math.sin(ang + math.pi / 2) * side * (6 + r.random() * 6)
+                if not in_text_zone(fx, fy):
+                    flowers_out.append((fx, fy, t + 0.15 + r.random() * 0.2, 9 + r.random() * 7))
+            # 연둣빛 새잎 조금
+            if u > 0.6 and r.random() < 0.018:
+                la = ang + r.choice([-1, 1]) * (0.7 + r.random() * 0.4)
+                for j, seg in enumerate(leaf_poly(x, y, la, 26 + r.random() * 16, 8, nseg=3)):
+                    L.poly(t + 0.3 + j * 0.05, seg, (118, 152, 64), 0.8)
+        # 끝의 꽃송이
+        flowers_out.append((end[0], end[1], t + 0.2, 10 + r.random() * 4))
+    return L
+
+
+def build_sun():
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    cx, cy = 1180, 175
+    d = np.hypot(xx - cx, yy - cy) * (1 + 0.06 * (fbm(W, H, 120, 3, 77) - 0.5))
+    a = smoothstep(118, 96, d) * (0.20 + 0.08 * fbm(W, H, 40, 3, 78)) + smoothstep(260, 110, d) * 0.05
+    return a.astype(np.float32), np.array([1.0, 0.78, 0.36], np.float32)
 
 
 # ---------------------------------------------------------------- 텍스트
@@ -573,6 +692,7 @@ DARK = (40, 34, 32)
 RED = (178, 30, 56)
 TEALT = (24, 92, 88)
 GOLD = (158, 118, 48)
+YDEEP = (196, 136, 12)
 
 
 def render_line(fonts, segs, font, size, spacing=0):
@@ -710,12 +830,20 @@ def build_texts(fonts):
     # 3. 다짐
     T.append(TextItem(render_line(fonts, [("앞으로도 더욱 ", DARK), ("친절", RED), ("하게", DARK)], "body", 60, 2), cx, 475, 15.5, 21.0))
     T.append(TextItem(render_line(fonts, [("환자분의 ", DARK), ("건강", TEALT), ("을 지키는 병원이 되겠습니다", DARK)], "body", 54, 2), cx, 575, 16.1, 21.1))
-    # 4. 엔딩
-    T.append(TextItem(render_line(fonts, [("친 절 한  마 음 ,  튼 튼 한  건 강", GOLD)], "body", 32, 6), cx, 335, 21.9, 40, rise=10))
-    T.append(TextItem(render_line(fonts, [("신길튼튼365정형외과", DARK)], "title", 100, 3), cx, 440, 22.3, 40, d_in=1.1, rise=26, stagger=0.09, shimmer=((24.9, 1.5), (27.6, 1.3))))
-    T.append(TextItem(render_line(fonts, [("서울특별시 영등포구 가마산로 483  3A01호~3A05호", TEALT)], "body", 40, 1), cx, 578, 23.3, 40))
-    T.append(TextItem(render_line(fonts, [("앞으로도 변함없는 성원 부탁드립니다", DARK)], "reg", 40, 2), cx, 652, 24.0, 40))
-    T.append(TextItem(render_line(fonts, [("감사합니다", RED)], "brush", 84, 2), cx, 748, 25.3, 40, d_in=1.0, stagger=0.16))
+    # 4. 개나리 장면
+    T.append(TextItem(render_line(fonts, [("아픈 곳을 먼저 살피는 ", DARK), ("따뜻한 손길", YDEEP)], "body", 58, 2), cx, 475, 25.6, 31.4))
+    T.append(TextItem(render_line(fonts, [("한 분 한 분 ", DARK), ("정성", RED), ("으로 진료하겠습니다", DARK)], "body", 56, 2), cx, 575, 26.2, 31.5))
+    T.append(TextItem(render_line(fonts, [("정확한 진단, 꼼꼼한 치료로", DARK)], "body", 58, 2), cx, 475, 32.3, 38.0))
+    T.append(TextItem(render_line(fonts, [("튼튼한 ", YDEEP), ("일상을 되찾아 드리겠습니다", DARK)], "body", 56, 2), cx, 575, 32.9, 38.1))
+    # 5. 다시 매화와 대나무
+    T.append(TextItem(render_line(fonts, [("언제나 여러분 곁에서", DARK)], "body", 60, 2), cx, 475, 41.3, 46.6))
+    T.append(TextItem(render_line(fonts, [("가장 가까운 ", DARK), ("건강 지킴이", TEALT), ("가 되겠습니다", DARK)], "body", 56, 2), cx, 575, 41.9, 46.7))
+    # 6. 엔딩
+    T.append(TextItem(render_line(fonts, [("친 절 한  마 음 ,  튼 튼 한  건 강", GOLD)], "body", 32, 6), cx, 335, 48.1, 99, rise=10))
+    T.append(TextItem(render_line(fonts, [("신길튼튼365정형외과", DARK)], "title", 100, 3), cx, 440, 48.5, 99, d_in=1.1, rise=26, stagger=0.09, shimmer=((51.1, 1.5), (54.2, 1.3), (57.0, 1.3))))
+    T.append(TextItem(render_line(fonts, [("서울특별시 영등포구 가마산로 483  3A01호~3A05호", TEALT)], "body", 40, 1), cx, 578, 49.5, 99))
+    T.append(TextItem(render_line(fonts, [("앞으로도 변함없는 성원 부탁드립니다", DARK)], "reg", 40, 2), cx, 652, 50.2, 99))
+    T.append(TextItem(render_line(fonts, [("감사합니다", RED)], "brush", 84, 2), cx, 748, 51.5, 99, d_in=1.0, stagger=0.16))
     return T
 
 
@@ -740,6 +868,29 @@ class Scene:
         self.rule = Image.new("RGBA", (420, 6), (0, 0, 0, 0))
         dd = ImageDraw.Draw(self.rule)
         dd.line([(0, 3), (420, 3)], fill=(176, 138, 66, 210), width=2)
+        # 중간 장면: 개나리
+        self.yflowers = []
+        self.fors = build_forsythia(self.yflowers)
+        self.fors.rasterize(303, dry=0.30, bleed_r=9, bleed_a=0.22)
+        rr = np.random.default_rng(31)
+        self.yflowers = [dict(x=x, y=y, t=t, spr=make_forsythia_sprite(R, rr)) for (x, y, t, R) in self.yflowers]
+        self.sun = build_sun()
+        ry = np.random.default_rng(99)
+        self.ypetals = []
+        for i in range(34):
+            fg = i < 3
+            size = (34 + ry.random() * 12) if fg else (11 + ry.random() * 10)
+            self.ypetals.append(dict(
+                t0=24.5 + i * 0.42 + ry.random() * 0.4, x0=1100 + ry.random() * 900, y0=-60 + ry.random() * 400,
+                vx=-(50 + ry.random() * 70), vy=40 + ry.random() * 45,
+                amp=22 + ry.random() * 40, fr=0.25 + ry.random() * 0.35, ph=ry.random() * math.tau,
+                rot=ry.random() * 360, vr=(ry.random() - 0.5) * 160, flip=0.5 + ry.random() * 1.2,
+                spr=make_petal_sprite(size, ry, YEL), fg=fg))
+        # 장면 전환용 먹 번짐 필드
+        yy_, xx_ = np.mgrid[0:H, 0:W].astype(np.float32)
+        dd = np.hypot(xx_ - W / 2, yy_ - H / 2) / 1100
+        self.tfield = (0.55 * fbm(W, H, 220, 4, 4242) + 0.45 * dd).astype(np.float32)
+        self.tfield = (self.tfield - self.tfield.min()) / (self.tfield.max() - self.tfield.min())
         # 흐르는 안개
         mist = fbm(W + 900, H, 260, 4, 909)
         yy = np.arange(H, dtype=np.float32)[:, None]
@@ -773,8 +924,8 @@ class Scene:
         """모서리에서 시작해 그려지는 이중 금선 테두리."""
         ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         d = ImageDraw.Draw(ov)
-        p = ease_out_cubic((t - 21.3) / 2.2)
-        a = int(200 * sstep(21.3, 22.0, t))
+        p = ease_out_cubic((t - 47.5) / 2.2)
+        a = int(200 * sstep(47.5, 48.2, t))
         for inset, wd, al in ((44, 2, 1.0), (56, 1, 0.7)):
             x0, y0, x1, y1 = inset, inset, W - inset, H - inset
             hx, hy = (x1 - x0) / 2 * p, (y1 - y0) / 2 * p
@@ -788,7 +939,8 @@ class Scene:
             d.polygon([(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)], fill=(186, 146, 70, a))
         return ov
 
-    def frame(self, t):
+    def bg_A(self, t):
+        """매화와 대나무 장면."""
         img = self.paper.copy()
         # 원경 산 (안개처럼 번지며)
         for a, col, T in self.mountains:
@@ -815,8 +967,8 @@ class Scene:
         self.plum.apply(img, t, pdx, pdy)
         self.bamboo.apply(img, t, int(round(-30 * pd)), int(round(-6 * pd)))
         # 엔딩: 제목 뒤 옅은 먹 번짐
-        if t > 21.4:
-            p = ease_out_cubic((t - 21.4) / 3.0)
+        if t > 47.6:
+            p = ease_out_cubic((t - 47.6) / 3.0)
             edge = 80 + 560 * p - self.drop_d
             a = smoothstep(-10, 60, edge) * 0.035 * self.drop_gran
             img *= 1 - a[..., None] * (1 - np.array([0.5, 0.56, 0.55], np.float32))
@@ -844,7 +996,12 @@ class Scene:
                 im = Image.fromarray(arr, "RGBA")
             canvas.alpha_composite(im, (int(b["x"] + pdx - im.size[0] / 2), int(b["y"] + pdy - im.size[1] / 2)))
 
-        # 카메라: 아주 느린 줌 인 + 미세한 패닝
+        canvas = self.camera(canvas, t)
+        self.draw_petals(canvas, t, self.petals)
+        self.draw_dust(canvas, t)
+        return canvas
+
+    def camera(self, canvas, t):
         z = 1.02 + 0.045 * sstep(0, DUR, t)
         cw, ch = W / z, H / z
         ox = (W - cw) / 2 + 10 * math.sin(t * 0.21)
@@ -852,8 +1009,10 @@ class Scene:
         ox = min(max(ox, 0), W - cw); oy = min(max(oy, 0), H - ch)
         canvas = canvas.resize((W, H), Image.BICUBIC, box=(ox, oy, ox + cw, oy + ch))
 
-        # 흩날리는 꽃잎
-        for p in self.petals:
+        return canvas
+
+    def draw_petals(self, canvas, t, petals):
+        for p in petals:
             dt = t - p["t0"]
             if dt < 0:
                 continue
@@ -876,11 +1035,12 @@ class Scene:
                 im = Image.fromarray(arr, "RGBA")
             canvas.alpha_composite(im, (int(x - im.size[0] / 2), int(y - im.size[1] / 2)))
 
-        # 금빛 먼지: 천천히 떠오르며 반짝인다
+
+    def draw_dust(self, canvas, t):
         for d in self.dust:
-            if t < d["t0"] or (d["late"] and t < 20.5):
+            if t < d["t0"] or (d["late"] and t < 46.7):
                 continue
-            tt = t - (20.5 if d["late"] else d["t0"])
+            tt = t - (46.7 if d["late"] else d["t0"])
             x = (d["x"] + d["vx"] * tt + d["amp"] * math.sin(d["fr"] * math.tau * tt + d["ph"])) % W
             y = (d["y"] + d["vy"] * tt) % H
             a = sstep(0, 1.5, tt) * (0.25 + 0.75 * math.sin(d["tw"] * tt + d["ph"]) ** 2)
@@ -888,31 +1048,87 @@ class Scene:
             arr[..., 3] = (arr[..., 3] * a * 0.85).astype(np.uint8)
             im = Image.fromarray(arr, "RGBA")
             canvas.alpha_composite(im, (int(x), int(y)))
+
+    def bg_B(self, t):
+        """중간 장면: 노란 개나리가 피어나는 봄."""
+        img = self.paper.copy()
+        for a, col, T in self.mountains:
+            img *= 1 - a[..., None] * 0.8 * (1 - col)
+        sa, scol = self.sun
+        img *= 1 - (sa * sstep(23.0, 26.5, t))[..., None] * (1 - scol)
+        off = int(18 * t) % 900
+        m = self.mist[:, off:off + W] * 0.55
+        img += (self.mist_col - img) * m[..., None] * 0.6
+        q = sstep(23.0, DUR, t)
+        fdx = int(round(-20 * q))
+        self.fors.apply(img, t, fdx, 0)
+        canvas = Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8), "RGB").convert("RGBA")
+        for b in self.yflowers:
+            k = (t - b["t"]) / 0.6
+            if k <= 0:
+                continue
+            s_ = ease_out_back(k, 2.2) if k < 1 else 1.0
+            im = b.get("_pil")
+            if im is None:
+                im = Image.fromarray((b["spr"] * 255).astype(np.uint8), "RGBA")
+                b["_pil"] = im
+            if k < 1:
+                nw, nh = max(1, int(im.size[0] * s_)), max(1, int(im.size[1] * s_))
+                im = im.resize((nw, nh), Image.BILINEAR)
+                arr = np.asarray(im).copy()
+                arr[..., 3] = (arr[..., 3] * min(1, k * 2.5)).astype(np.uint8)
+                im = Image.fromarray(arr, "RGBA")
+            canvas.alpha_composite(im, (int(b["x"] + fdx - im.size[0] / 2), int(b["y"] - im.size[1] / 2)))
+        canvas = self.camera(canvas, t)
+        self.draw_petals(canvas, t, self.ypetals)
+        self.draw_dust(canvas, t)
+        return canvas
+
+    def mix(self, ca, cb, p):
+        """먹이 번지듯 cb 가 ca 위로 퍼져 나온다."""
+        A = np.asarray(ca, np.float32)[..., :3] / 255
+        B = np.asarray(cb, np.float32)[..., :3] / 255
+        v = p * 1.25 - self.tfield
+        m = smoothstep(0.0, 0.09, v)[..., None]
+        edge = (np.exp(-((v - 0.01) / 0.03) ** 2) * 0.32 * math.sin(math.pi * min(max(p, 0), 1)))[..., None]
+        out = A * (1 - m) + B * m
+        out *= 1 - edge * (1 - np.array([0.42, 0.40, 0.38], np.float32))
+        return Image.fromarray((np.clip(out, 0, 1) * 255).astype(np.uint8), "RGB").convert("RGBA")
+
+    def frame(self, t):
+        if 22.0 <= t < 24.0:
+            canvas = self.mix(self.bg_A(t), self.bg_B(t), sstep(22.0, 24.0, t))
+        elif 24.0 <= t < 38.8:
+            canvas = self.bg_B(t)
+        elif 38.8 <= t < 40.8:
+            canvas = self.mix(self.bg_B(t), self.bg_A(t), sstep(38.8, 40.8, t))
+        else:
+            canvas = self.bg_A(t)
         # 금박 테두리 (엔딩)
-        if t > 21.3:
+        if t > 47.5:
             canvas.alpha_composite(self.frame_overlay(t))
         # 문구
         for ti in self.texts:
             ti.draw(canvas, t)
         # 엔딩 장식선 + 낙관
-        if t > 23.0:
-            p = ease_out_cubic((t - 23.0) / 1.2)
+        if t > 49.2:
+            p = ease_out_cubic((t - 49.2) / 1.2)
             rw = int(420 * p)
             if rw > 2:
                 r_ = self.rule.crop(((420 - rw) // 2, 0, (420 + rw) // 2, 6))
                 canvas.alpha_composite(r_, (int(W / 2 - rw / 2), 516))
-        if t > 24.3:
-            k = (t - 24.3) / 0.45
+        if t > 50.5:
+            k = (t - 50.5) / 0.45
             s = 1.6 - 0.6 * ease_out_cubic(k) if k < 1 else 1.0
             if k >= 1:
-                s = 1.0 + 0.04 * math.exp(-(t - 24.75) * 6) * math.sin((t - 24.75) * 30)
+                s = 1.0 + 0.04 * math.exp(-(t - 50.95) * 6) * math.sin((t - 50.95) * 30)
             a = min(1, k * 1.8) * 0.92
             sz = max(4, int(96 * s))
             im = self.seal.resize((sz, sz), Image.BILINEAR).rotate(-4, Image.BICUBIC, expand=True)
             arr = np.asarray(im).copy()
             arr[..., 3] = (arr[..., 3] * a).astype(np.uint8)
             im = Image.fromarray(arr, "RGBA")
-            ti = next(x for x in self.texts if x.t_in == 22.3)
+            ti = next(x for x in self.texts if x.t_in == 48.5)
             sx_ = W / 2 + (ti.w - 2 * int(100 * 0.6)) / 2 + 74
             canvas.alpha_composite(im, (int(sx_ - im.size[0] / 2), int(446 - im.size[1] / 2)))
 
@@ -1003,20 +1219,27 @@ def make_music(path):
         L[i:i + len(sig)] += sig * g_l
         R[i:i + len(sig)] += sig * g_r
 
-    # 화성 진행 (8박 단위): D - Bm - G - A(sus) - D
+    # 화성 진행: [매화] D-Bm-G-A | [개나리] D-G-Bm-A | [엔딩] D-G-D
     chords = [
         (0, [50, 57, 62, 66, 64]),
         (8, [47, 54, 59, 62, 69]),
         (16, [43, 50, 55, 59, 69]),
         (24, [45, 52, 57, 62, 64]),
-        (31, [50, 57, 62, 66, 69]),
+        (28, [50, 57, 62, 66, 69]),
+        (36, [43, 50, 55, 59, 62]),
+        (44, [47, 54, 59, 62, 66]),
+        (52, [45, 52, 57, 61, 64]),
+        (56, [50, 57, 62, 66, 69]),
+        (62, [43, 50, 55, 59, 62]),
+        (66, [50, 57, 62, 66, 69]),
     ]
+    END_BEAT = 74
     for i, (b, notes) in enumerate(chords):
-        b2 = chords[i + 1][0] if i + 1 < len(chords) else 36
+        b2 = chords[i + 1][0] if i + 1 < len(chords) else END_BEAT
         d = (b2 - b) * beat + 2.2
         add(pad([midi_hz(m) for m in notes], d, 0.09), b * beat, 0.0)
         add(pad([midi_hz(notes[0] - 12)], d, 0.07), b * beat, 0.0)
-    # 잔잔한 아르페지오 (8분음표)
+    # 잔잔한 아르페지오 (8분음표) — 개나리 장면에서는 한 옥타브 위를 섞어 밝게
     r = np.random.default_rng(7)
     for i, (b, notes) in enumerate(chords[:-1]):
         b2 = chords[i + 1][0]
@@ -1024,8 +1247,11 @@ def make_music(path):
         pat = [0, 1, 2, 3, 2, 1, 2, 3]
         k = 0
         x = b + (1 if b == 0 else 0)
+        bright = 28 <= b < 56
         while x < b2:
             m = tones[pat[k % len(pat)] % len(tones)]
+            if bright and k % 4 == 3:
+                m += 12
             add(pluck(midi_hz(m), 2.2, 0.075 * (0.8 + 0.3 * r.random())), x * beat + r.normal() * 0.006, -0.35 + 0.7 * r.random())
             x += 0.5
             k += 1
@@ -1033,12 +1259,21 @@ def make_music(path):
     mel = [(2, 69, 1), (3, 71, .5), (3.5, 74, .5), (4, 76, 1.5), (5.5, 74, .5), (6, 71, 1), (7, 69, 2),
            (10, 74, 1), (11, 76, .5), (11.5, 78, .5), (12, 81, 1.5), (13.5, 78, .5), (14, 76, 1), (15, 74, 2),
            (18, 71, 1), (19, 74, .5), (19.5, 76, .5), (20, 78, 1), (21, 76, 1), (22, 74, 1), (23, 71, 1), (24, 69, 3),
-           (26, 74, 1), (27, 78, 1), (28, 81, 1.5), (29.5, 78, .5), (30, 76, 1), (31, 74, 4)]
+           # 개나리 장면: 높고 밝게
+           (29, 78, 1), (30, 81, .5), (30.5, 83, .5), (31, 81, 1), (32, 78, 1), (33, 76, 2),
+           (36, 74, 1), (37, 79, .5), (37.5, 81, .5), (38, 83, 1.5), (39.5, 81, .5), (40, 79, 2),
+           (44, 78, 1), (45, 81, .5), (45.5, 83, .5), (46, 86, 1.5), (47.5, 83, .5), (48, 81, 1), (49, 78, 1), (50, 76, 2),
+           (52, 76, 1), (53, 73, 1), (54, 76, 1), (55, 69, 1),
+           # 엔딩
+           (56, 74, 1), (57, 78, 1), (58, 81, 2), (60, 78, .5), (60.5, 76, .5), (61, 74, 1),
+           (62, 71, 1), (63, 74, 1), (64, 76, 2), (66, 74, 5)]
     for b, m, d in mel:
         add(pluck(midi_hz(m), max(1.6, d * beat + 1.2), 0.20), b * beat, 0.12)
         add(pluck(midi_hz(m + 12), max(1.0, d * beat + 0.6), 0.035), b * beat + 0.01, 0.4)
     # 풍경(종) 소리: 장면 전환 지점
-    for tt, m, a in [(0.4, 86, 0.10), (6.3, 81, 0.07), (9.2, 86, 0.08), (15.4, 83, 0.07), (21.8, 86, 0.10), (24.3, 74, 0.12)]:
+    for tt, m, a in [(0.4, 86, 0.10), (6.3, 81, 0.07), (9.2, 86, 0.08), (15.4, 83, 0.07), (22.0, 86, 0.10),
+                     (25.5, 90, 0.06), (32.2, 86, 0.06), (38.8, 86, 0.09), (41.2, 81, 0.06), (47.6, 86, 0.10),
+                     (50.5, 74, 0.12)]:
         add(bell(midi_hz(m), 4.0, a), tt, 0.25)
 
     # 리버브 (지수 감쇠 노이즈 IR 컨볼루션)
