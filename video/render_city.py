@@ -305,143 +305,6 @@ def cloud_sprite(w, r):
     return im.resize((w, h), Image.LANCZOS)
 
 
-
-# ---------------------------------------------------------------- 크리스마스 트리 (초록 + 빨강 + 금)
-
-TW, TH = 560, 700          # 트리 스프라이트 크기
-TCX, TTOP = 280, 60        # 스프라이트 안의 중심 x, 꼭대기 y
-TREE_X, TREE_Y = 470, 280  # 화면상 스프라이트 좌상단 기준 (x 는 중심)
-RED = (196, 22, 40)
-DEEP_RED = (128, 10, 26)
-EMER = [(10, 64, 44), (16, 84, 56), (24, 104, 66), (36, 124, 76), (54, 146, 88)]
-
-
-def tier_halfwidth(y):
-    return max(0.0, (y - TTOP) / (TH - TTOP - 60)) * 250
-
-
-def build_tree_tiers(r):
-    """아래층부터 차례로 나타나는 7단의 전나무 가지 (2배 해상도로 그린 뒤 축소)."""
-    S = 2
-    tiers = []
-    n = 7
-    for k in range(n):  # k=0: 맨 위
-        yt = TTOP + 18 + k * 78
-        yb = yt + 150 + k * 6
-        hw = 40 + k * 35
-        im = Image.new("RGBA", (TW * S, TH * S), (0, 0, 0, 0))
-        d = ImageDraw.Draw(im)
-        # 물결 모양 아랫단
-        pts = [(TCX * S, (yt - 10) * S), ((TCX - hw * 0.62) * S, (yt + (yb - yt) * 0.55) * S), ((TCX - hw) * S, yb * S)]
-        bumps = max(3, int(hw * 2 / 46))
-        for i in range(bumps * 6 + 1):
-            u = i / (bumps * 6)
-            x = TCX - hw + 2 * hw * u
-            y = yb - 4 + 12 * abs(math.sin(u * bumps * math.pi)) - 10 * math.sin(u * math.pi)
-            pts.append((x * S, y * S))
-        pts += [((TCX + hw) * S, yb * S), ((TCX + hw * 0.62) * S, (yt + (yb - yt) * 0.55) * S)]
-        d.polygon(pts, fill=EMER[0] + (255,))
-        mask = np.asarray(im)[..., 3] > 0
-        # 솔잎 결: 바깥·아래로 뻗는 짧은 붓질, 빛은 왼쪽 위에서
-        nd = int(hw * (yb - yt) * 0.09)
-        ys, xs = np.where(mask)
-        if len(xs):
-            idx = r.integers(0, len(xs), nd)
-            for j in idx:
-                x, y = xs[j] / S, ys[j] / S
-                side = (x - TCX) / max(1, hw)
-                ang = math.pi / 2 - side * 1.0 + r.normal() * 0.25
-                L = r.uniform(9, 20)
-                light = 0.5 - side * 0.35 + (yb - y) / (yb - yt) * 0.25 + r.normal() * 0.15
-                ci = int(np.clip(light * 4.2, 0, 4))
-                c = EMER[ci]
-                d.line([(x * S, y * S), ((x + math.cos(ang) * L) * S, (y + math.sin(ang) * L) * S)], fill=c + (255,), width=2 * S // 2 + 1)
-        # 위쪽(윗단에 가려지는 부분) 그늘
-        arr = np.asarray(im).astype(np.float32)
-        yy = (np.arange(TH * S, dtype=np.float32)[:, None] / S - yt) / (yb - yt)
-        shade = 0.55 + 0.45 * np.clip(yy * 1.4, 0, 1)
-        arr[..., :3] *= shade[..., None]
-        # 가장자리 서리(눈) 살짝
-        im = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGBA")
-        d = ImageDraw.Draw(im)
-        for i in range(int(hw / 5)):
-            u = r.random()
-            x = TCX - hw + 2 * hw * u
-            y = yb - 4 + 12 * abs(math.sin(u * bumps * math.pi)) - 10 * math.sin(u * math.pi)
-            rr = r.uniform(2, 4.5) * S
-            d.ellipse([x * S - rr, (y - 3) * S - rr * 0.6, x * S + rr, (y - 3) * S + rr * 0.6], fill=(236, 244, 255, 200))
-        im = im.resize((TW, TH), Image.LANCZOS)
-        tiers.append(dict(img=im, yt=yt, yb=yb, k=k))
-    return tiers[::-1]  # 아래층부터
-
-
-def ornament_sprite(R, col):
-    S = 4
-    n = int(R * 2.6 * S)
-    g = np.mgrid[0:n, 0:n].astype(np.float32) - (n - 1) / 2
-    d = np.hypot(g[0], g[1]) / (R * S)
-    a = smoothstep(1.0, 0.94, d)
-    # 광택: 왼쪽 위 하이라이트, 가장자리 어둡게
-    hx, hy = -0.38, -0.42
-    hl = np.exp(-(((g[1] / (R * S) - hx) ** 2 + (g[0] / (R * S) - hy) ** 2) / 0.05))
-    shade = 1.0 - 0.55 * np.clip(d, 0, 1) ** 2.2
-    c = np.array(col, np.float32)[None, None, :] * shade[..., None]
-    c = c * (1 - hl[..., None] * 0.9) + 255 * hl[..., None] * 0.9
-    arr = np.zeros((n, n, 4), np.float32)
-    arr[..., :3] = c
-    arr[..., 3] = a * 255
-    im = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGBA")
-    dd = ImageDraw.Draw(im)
-    cx = n / 2
-    dd.rectangle([cx - R * S * 0.28, cx - R * S * 1.18, cx + R * S * 0.28, cx - R * S * 0.92], fill=(214, 172, 80, 255))
-    dd.ellipse([cx - R * S * 0.12, cx - R * S * 1.42, cx + R * S * 0.12, cx - R * S * 1.16], outline=(214, 172, 80, 255), width=S)
-    return im.resize((n // S, n // S), Image.LANCZOS)
-
-
-def build_tree():
-    r = np.random.default_rng(1225)
-    tiers = build_tree_tiers(r)
-    for i, t_ in enumerate(tiers):
-        t_["t"] = 4.5 + i * 0.2
-    # 장식볼 (빨강 위주 + 금)
-    orns = []
-    tries = 0
-    while len(orns) < 34 and tries < 4000:
-        tries += 1
-        y = r.uniform(TTOP + 70, TH - 80)
-        hw = tier_halfwidth(y) * 0.86
-        x = TCX + r.uniform(-hw, hw)
-        if any((x - o["x"]) ** 2 + (y - o["y"]) ** 2 < 44 ** 2 for o in orns):
-            continue
-        gold = r.random() < 0.3
-        R_ = r.uniform(10, 15) if not gold else r.uniform(8, 12)
-        col = (214, 170, 70) if gold else [RED, (176, 16, 34), (214, 34, 50)][r.integers(0, 3)]
-        tier_i = int((TH - y) / (TH - TTOP) * 7)
-        orns.append(dict(x=x, y=y, spr=ornament_sprite(R_, col), t=4.9 + min(6, tier_i) * 0.2 + 0.3 + r.random() * 0.6))
-    # 금빛 비즈 가랜드 (나선, 앞쪽만)
-    beads = []
-    turns = 3.2
-    N = 520
-    for i in range(N):
-        u = i / N
-        y = TTOP + 70 + u * (TH - TTOP - 150)
-        ph = u * turns * math.tau + 0.6
-        hw = tier_halfwidth(y) * 0.92
-        front = math.cos(ph)
-        if front < -0.15:
-            continue
-        beads.append(dict(x=TCX + hw * math.sin(ph), y=y + 10 * front, a=0.55 + 0.45 * max(0, front), t=6.4 + u * 1.6))
-    # 따뜻한 요정 전구
-    lights = []
-    for i in range(130):
-        y = r.uniform(TTOP + 40, TH - 70)
-        hw = tier_halfwidth(y) * 0.9
-        x = TCX + r.uniform(-hw, hw)
-        c = [(255, 226, 150), (255, 240, 200), (255, 200, 110), (255, 120, 110)][r.integers(0, 4)]
-        lights.append(dict(x=x, y=y, c=c, t=6.0 + r.random() * 1.2, ph=r.random() * math.tau, s=1.8 + r.random() * 1.2))
-    return tiers, orns, beads, lights
-
-
 # ---------------------------------------------------------------- 장면
 
 class Scene:
@@ -470,20 +333,30 @@ class Scene:
                                   dep=dep))
         self.snow_spr = [soft_dot(1.6, (255, 255, 255), 0.5), soft_dot(2.8, (255, 255, 255), 0.4),
                          soft_dot(5.0, (255, 255, 255), 0.1)]
-        # 크리스마스 트리
-        self.tiers, self.orns, self.beads, self.tree_lights = build_tree()
-        self.bead_spr = soft_dot(2.6, (232, 190, 92), 0.75)
-        sk = Image.new("RGBA", (TW * 2, 120), (0, 0, 0, 0))
-        ImageDraw.Draw(sk).ellipse([TW * 2 * 0.12, 10, TW * 2 * 0.88, 110], fill=DEEP_RED + (255,))
-        ImageDraw.Draw(sk).ellipse([TW * 2 * 0.16, 14, TW * 2 * 0.84, 70], fill=(160, 18, 36, 255))
-        self.skirt = sk.resize((TW, 60), Image.LANCZOS)
-        trunk = Image.new("RGBA", (40, 50), (74, 44, 28, 255))
-        self.trunk = trunk
-        self.tree_star = dict(x=TREE_X, y=TREE_Y + TTOP - 6, t=6.2)
-        self.star_img = star_sprite(38, (240, 196, 92))
+        # 트리 (빛 점으로 쌓이는 기하학 트리)
+        self.tree = []
+        cx, base, top = 470, 905, 330
+        R = 22
+        pal = [GOLD, GOLD, GOLD, (255, 238, 190), CORAL, MINT, PINK]
+        for row in range(R):
+            yv = base - row * (base - top) / R
+            wv = 420 * (1 - row / R) + 10
+            n = max(1, int(wv / 24))
+            for i in range(n):
+                xv = cx - wv / 2 + (i + 0.5) * wv / n
+                c = pal[r.integers(0, len(pal))]
+                if (i + row) % 6 == 0:
+                    c = CORAL
+                if (i - row) % 9 == 0:
+                    c = MINT
+                self.tree.append(dict(x=xv, y=yv, c=c, t=4.6 + row * 0.11 + abs(i - n / 2) * 0.012,
+                                      ph=r.random() * math.tau, s=2.2 + r.random() * 1.6))
+        self.tree_star = dict(x=cx, y=top - 34, t=4.6 + R * 0.11 + 0.25)
+        self.star_img = star_sprite(36, GOLD)
+        self.tree_cx = cx
         # 줄 전구
         self.bulbs = []
-        pal2 = [(255, 214, 120), (226, 36, 48), (40, 168, 92), (255, 240, 210), (214, 170, 70)]
+        pal2 = [GOLD, CORAL, MINT, PINK, SKY]
         for si, (y0, sag, ph) in enumerate([(70, 70, 0), (40, 90, 0.5)]):
             n = 34
             for k in range(n + 1):
@@ -493,8 +366,8 @@ class Scene:
                 self.bulbs.append(dict(x=x, y=y, c=pal2[(k + si * 2) % len(pal2)], t=12.4 + u * 1.4 + si * 0.3,
                                        k=k + si))
         # 선물상자
-        gifts = [(1090, 110, RED, (230, 190, 96)), (1215, 84, (18, 96, 64), (230, 190, 96)), (1340, 128, (214, 170, 70), RED),
-                 (1630, 96, (245, 240, 230), RED), (1750, 120, (128, 10, 26), (230, 190, 96)), (1470, 70, (18, 96, 64), RED)]
+        gifts = [(1090, 110, CORAL, GOLD), (1215, 84, MINT, WHITE), (1340, 128, GOLD, CORAL),
+                 (1630, 96, PINK, WHITE), (1750, 120, SKY, GOLD), (1470, 70, CORAL, MINT)]
         self.gifts = [dict(x=x, w=w, img=gift_sprite(w, w * 0.85, c, rb), t=13.0 + i * 0.16) for i, (x, w, c, rb) in enumerate(gifts)]
         # 꽃가루(컨페티)
         cols = [CORAL, MINT, GOLD, PINK, SKY, WHITE]
@@ -557,7 +430,7 @@ class Scene:
         T.append(KText(self.T([("Christmas", GOLD)], "mont", 140, 2), rx, 490, 5.5, 12.1, mode="pop", stagger=0.06, d_in=0.55,
                        shimmer=((8.5, 1.0),)))
         T.append(KText(self.T([("행복이 가득한 크리스마스 되세요", WHITE)], "bold", 44, 1), rx, 610, 7.0, 12.2))
-        T.append(KText(self.T([("따뜻하고 포근한 ", WHITE), ("성탄절", (236, 70, 78))], "black", 66, 1), rx, 420, 12.8, 19.8, mode="pop", stagger=0.05))
+        T.append(KText(self.T([("따뜻하고 포근한 ", WHITE), ("성탄절", CORAL)], "black", 66, 1), rx, 420, 12.8, 19.8, mode="pop", stagger=0.05))
         T.append(KText(self.T([("사랑하는 사람들과 웃음 가득한 하루 보내세요", WHITE)], "bold", 40, 1), rx, 520, 13.6, 19.9))
         T.append(KText(self.T([("올 한 해 ", WHITE), ("신길튼튼365정형외과", MINT), ("와", WHITE)], "black", 54, 1), rx, 420, 20.4, 27.2, mode="pop", stagger=0.04))
         T.append(KText(self.T([("함께해 주셔서 진심으로 ", WHITE), ("감사합니다", GOLD)], "black", 54, 1), rx, 512, 21.0, 27.3, mode="pop", stagger=0.04))
@@ -655,6 +528,16 @@ class Scene:
             dh.ellipse([x / 2 - rh, y / 2 - rh, x / 2 + rh, y / 2 + rh], fill=cc)
 
         p_near = pan(t)
+        # 트리
+        tf = 1 - sstep(T_COUNT - 1.0, T_COUNT + 0.2, t)
+        if tf > 0 and t > 4.4:
+            for d in self.tree:
+                k = (t - d["t"]) / 0.35
+                if k <= 0:
+                    continue
+                s = ease_out_back(k, 3) if k < 1 else 1
+                tw = 0.65 + 0.35 * math.sin(t * 3.1 + d["ph"])
+                dot(d["x"] - p_near, d["y"], d["s"] * s, d["c"], tw * tf * min(1, k * 2))
         # 줄 전구 (흐르는 체이스 패턴)
         bf = 1 - sstep(T_COUNT - 0.5, T_COUNT + 0.3, t)
         bf2 = sstep(T_DROP, T_DROP + 1.0, t) * (1 - sstep(T_DAWN, T_DAWN + 3, t))
@@ -701,35 +584,6 @@ class Scene:
         out = (np.asarray(core, np.float32) * 0.9 + np.asarray(g1, np.float32) * 1.4 + np.asarray(g2, np.float32) * 1.2) / 255
         return out
 
-    def tree_glow(self, t):
-        """트리 위에 얹히는 요정 전구 (트리 앞쪽에 가산 합성)."""
-        core = Image.new("RGB", (W, H), (0, 0, 0))
-        half = Image.new("RGB", (W // 2, H // 2), (0, 0, 0))
-        dc, dh = ImageDraw.Draw(core), ImageDraw.Draw(half)
-
-        def dot(x, y, r, c, a):
-            cc = tuple(int(v * a) for v in c)
-            dc.ellipse([x - r, y - r, x + r, y + r], fill=cc)
-            rh = r * 1.8
-            dh.ellipse([x / 2 - rh, y / 2 - rh, x / 2 + rh, y / 2 + rh], fill=cc)
-
-        p_near = pan(t)
-        tf = 1 - sstep(T_COUNT - 1.0, T_COUNT + 0.2, t)
-        if tf > 0 and t > 5.9:
-            ox = TREE_X - TCX - p_near
-            for d in self.tree_lights:
-                k = (t - d["t"]) / 0.4
-                if k <= 0:
-                    continue
-                tw = 0.5 + 0.5 * math.sin(t * 2.7 + d["ph"])
-                dot(ox + d["x"], TREE_Y + d["y"], d["s"], d["c"], tw * tf * min(1, k))
-            # 별의 후광
-            if t > 6.2:
-                dot(TREE_X - p_near, TREE_Y + TTOP - 6, 10, (255, 220, 140), 0.6 * tf * min(1, (t - 6.2) * 2))
-        g1 = half.filter(ImageFilter.GaussianBlur(3)).resize((W, H), Image.BILINEAR)
-        g2 = half.filter(ImageFilter.GaussianBlur(10)).resize((W, H), Image.BILINEAR)
-        return (np.asarray(core, np.float32) * 0.9 + np.asarray(g1, np.float32) * 0.85 + np.asarray(g2, np.float32) * 0.55) / 255
-
     def camera(self, canvas, t):
         z = 1.02 + 0.03 * sstep(0, DUR, t) + 0.025 * math.exp(-max(0, t - T_DROP) * 3) * (t > T_DROP)
         cw, ch = W / z, H / z
@@ -751,46 +605,6 @@ class Scene:
             for (x, y, ph, sp, k) in self.stars:
                 a = night * sstep(0.5, 2.5, t) * (0.35 + 0.65 * math.sin(t * sp + ph) ** 2)
                 canvas.alpha_composite(fade(self.star_spr[k], a), (int(x), int(y)))
-        # 크리스마스 트리 (아래층부터 솟아오르듯)
-        tf = 1 - sstep(T_COUNT - 1.0, T_COUNT + 0.2, t)
-        if t > 4.4 and tf > 0:
-            ox = int(TREE_X - TCX - pan(t))
-            canvas.alpha_composite(fade(self.skirt, tf * sstep(4.4, 4.9, t)), (ox, TREE_Y + TH - 92))
-            canvas.alpha_composite(fade(self.trunk, tf * sstep(4.4, 4.8, t)), (ox + TCX - 20, TREE_Y + TH - 120))
-            for tr in self.tiers:
-                k = (t - tr["t"]) / 0.5
-                if k <= 0:
-                    continue
-                im = tr["img"]
-                if k < 1:
-                    s_ = ease_out_back(k, 1.8)
-                    sw, sh_ = max(1, int(TW * (0.6 + 0.4 * s_))), max(1, int(TH * s_))
-                    im2 = im.resize((sw, sh_), Image.BILINEAR)
-                    # 단의 윗부분을 기준으로 펼쳐진다
-                    yo = int(tr["yt"] * (1 - s_))
-                    canvas.alpha_composite(fade(im2, tf * min(1, k * 3)), (ox + (TW - sw) // 2, TREE_Y + yo))
-                else:
-                    canvas.alpha_composite(fade(im, tf) if tf < 1 else im, (ox, TREE_Y))
-            for b in self.beads:
-                if t < b["t"]:
-                    continue
-                canvas.alpha_composite(fade(self.bead_spr, b["a"] * tf * min(1, (t - b["t"]) * 6)),
-                                       (int(ox + b["x"] - 3), int(TREE_Y + b["y"] - 3)))
-            for o in self.orns:
-                k = (t - o["t"]) / 0.45
-                if k <= 0:
-                    continue
-                s_ = ease_out_back(k, 2.6) if k < 1 else 1.0
-                im = o["spr"]
-                if s_ != 1.0:
-                    im = im.resize((max(1, int(im.size[0] * s_)),) * 2, Image.BILINEAR)
-                # 살짝 흔들림
-                sw_ = 1.5 * math.sin(t * 1.8 + o["x"])
-                canvas.alpha_composite(fade(im, tf * min(1, k * 3)), (int(ox + o["x"] - im.size[0] / 2 + sw_), int(TREE_Y + o["y"] - im.size[1] / 2)))
-            if t > 5.9:
-                arr = np.asarray(canvas).astype(np.float32)
-                arr[..., :3] += self.tree_glow(t) * 255
-                canvas = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGBA")
         # 트리 꼭대기 별
         st = self.tree_star
         tf = 1 - sstep(T_COUNT - 1.0, T_COUNT + 0.2, t)
