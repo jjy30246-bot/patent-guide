@@ -73,7 +73,7 @@ def fbm(w, h, base, octaves, seed):
 # ---------------------------------------------------------------- paper
 
 def make_paper():
-    base = np.array([244, 237, 222], np.float32) / 255
+    base = np.array([251, 248, 240], np.float32) / 255
     low = fbm(W, H, 300, 4, 1) - 0.5
     fine = value_noise(W, H, 2, 7) - 0.5
     paper = base[None, None, :] * (1 + 0.05 * low[..., None] + 0.018 * fine[..., None])
@@ -93,11 +93,11 @@ def make_paper():
             pts.append((x, y))
         d.line(pts, fill=int(25 + r.random() * 40), width=1)
     fib = np.asarray(fib.filter(ImageFilter.GaussianBlur(0.6)), np.float32) / 255
-    paper *= (1 - 0.10 * fib[..., None])
+    paper *= (1 - 0.06 * fib[..., None])
     # 비네팅
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     v = ((xx - W / 2) / (W * 0.62)) ** 2 + ((yy - H / 2) / (H * 0.66)) ** 2
-    paper *= (1 - 0.16 * np.clip(v, 0, 1.4)[..., None] ** 1.3)
+    paper *= (1 - 0.06 * np.clip(v, 0, 1.4)[..., None] ** 1.3)
     return np.clip(paper, 0, 1).astype(np.float32)
 
 
@@ -310,7 +310,7 @@ def make_blossom_sprite(radius, r, kind):
 
 
 def in_text_zone(x, y):
-    return 470 < x < 1450 and 330 < y < 790
+    return 470 < x < 1450 and 290 < y < 790
 
 
 def plum_stroke(L, pts, w0, w1, t0, speed, r):
@@ -488,8 +488,8 @@ def build_mountains():
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     out = []
     for k, (base, amp, alpha, col, seed) in enumerate([
-        (840, 120, 0.16, (90, 120, 118), 2),
-        (930, 90, 0.24, (70, 96, 96), 9),
+        (840, 120, 0.10, (110, 140, 138), 2),
+        (930, 90, 0.15, (96, 124, 122), 9),
     ]):
         x = np.arange(W, dtype=np.float32)
         r = np.random.default_rng(seed)
@@ -703,18 +703,18 @@ def build_texts(fonts):
     # 1. 감사
     T.append(TextItem(render_line(fonts, [("늘 곁에서 함께해 주신 여러분께", DARK)], "body", 60, 2), cx, 480, 3.3, 8.5))
     T.append(TextItem(render_line(fonts, [("진심으로 ", DARK), ("감사", RED), ("드립니다", DARK)], "body", 60, 2), cx, 580, 3.9, 8.6))
-    # 2. 확장 이전
-    T.append(TextItem(render_line(fonts, [("신길튼튼365정형외과", TEALT), ("가", DARK)], "body", 62, 2), cx, 470, 9.3, 14.8))
-    T.append(TextItem(render_line(fonts, [("새로운 공간으로 ", DARK), ("확장 이전", RED), ("합니다", DARK)], "body", 60, 2), cx, 575, 9.9, 14.9))
-    T.append(TextItem(render_line(fonts, [("2026년 1월 · 영등포구 가마산로 483", TEALT)], "reg", 38, 2), cx, 668, 10.8, 15.0, rise=10))
+    # 2. 이전 완료 · 운영 중
+    T.append(TextItem(render_line(fonts, [("신길튼튼365정형외과", TEALT), ("는", DARK)], "body", 62, 2), cx, 470, 9.3, 14.8))
+    T.append(TextItem(render_line(fonts, [("새 공간에서 ", DARK), ("힘차게 진료", RED), ("하고 있습니다", DARK)], "body", 58, 2), cx, 575, 9.9, 14.9))
+    T.append(TextItem(render_line(fonts, [("2026년 1월 이전 · 영등포구 가마산로 483", TEALT)], "reg", 38, 2), cx, 668, 10.8, 15.0, rise=10))
     # 3. 다짐
-    T.append(TextItem(render_line(fonts, [("더 넓어진 공간, 더 편안한 진료", DARK)], "body", 58, 2), cx, 475, 15.5, 21.0))
-    T.append(TextItem(render_line(fonts, [("한결같은 마음으로 여러분의 건강을 지키겠습니다", DARK)], "reg", 44, 1), cx, 570, 16.1, 21.1))
+    T.append(TextItem(render_line(fonts, [("앞으로도 더욱 ", DARK), ("친절", RED), ("하게", DARK)], "body", 60, 2), cx, 475, 15.5, 21.0))
+    T.append(TextItem(render_line(fonts, [("환자분의 ", DARK), ("건강", TEALT), ("을 지키는 병원이 되겠습니다", DARK)], "body", 54, 2), cx, 575, 16.1, 21.1))
     # 4. 엔딩
-    T.append(TextItem(render_line(fonts, [("2026. 01  확 장 이 전", GOLD)], "body", 34, 10), cx, 335, 21.9, 40, rise=10))
+    T.append(TextItem(render_line(fonts, [("친 절 한  마 음 ,  튼 튼 한  건 강", GOLD)], "body", 32, 6), cx, 335, 21.9, 40, rise=10))
     T.append(TextItem(render_line(fonts, [("신길튼튼365정형외과", DARK)], "title", 100, 3), cx, 440, 22.3, 40, d_in=1.1, rise=26, stagger=0.09, shimmer=((24.9, 1.5), (27.6, 1.3))))
     T.append(TextItem(render_line(fonts, [("서울특별시 영등포구 가마산로 483  3A01호~3A05호", TEALT)], "body", 40, 1), cx, 578, 23.3, 40))
-    T.append(TextItem(render_line(fonts, [("그동안 보내주신 성원에 깊이 감사드립니다", DARK)], "reg", 40, 2), cx, 652, 24.0, 40))
+    T.append(TextItem(render_line(fonts, [("앞으로도 변함없는 성원 부탁드립니다", DARK)], "reg", 40, 2), cx, 652, 24.0, 40))
     T.append(TextItem(render_line(fonts, [("감사합니다", RED)], "brush", 84, 2), cx, 748, 25.3, 40, d_in=1.0, stagger=0.16))
     return T
 
@@ -745,7 +745,7 @@ class Scene:
         yy = np.arange(H, dtype=np.float32)[:, None]
         band = np.exp(-((yy - 860) / 150) ** 2) * 0.9 + np.exp(-((yy - 120) / 120) ** 2) * 0.35
         self.mist = (smoothstep(0.42, 0.78, mist) * band).astype(np.float32)
-        self.mist_col = np.array([0.985, 0.975, 0.955], np.float32)
+        self.mist_col = np.array([1.0, 0.995, 0.98], np.float32)
         # 따뜻한 빛 번짐 (light leak)
         gy, gx = np.mgrid[0:H * 2:2, 0:W * 2:2].astype(np.float32)
         gl = np.exp(-(((gx - W) / 900) ** 2 + ((gy - H) / 620) ** 2))
@@ -802,7 +802,7 @@ class Scene:
         if 0.3 < t < 9.5:
             p = ease_out_cubic((t - 0.35) / 2.6)
             rad = 40 + 520 * p
-            dens = 0.62 * (1 - sstep(0.5, 3.4, t)) + 0.05 * (1 - sstep(5.5, 9.4, t))
+            dens = 0.50 * (1 - sstep(0.5, 3.0, t)) + 0.03 * (1 - sstep(5.0, 8.5, t))
             edge = rad - self.drop_d
             core = smoothstep(-6, 30, edge)
             ring = np.exp(-((edge - 6) / 16) ** 2) * 0.55 * (1 - sstep(1.0, 4.0, t))
@@ -818,7 +818,7 @@ class Scene:
         if t > 21.4:
             p = ease_out_cubic((t - 21.4) / 3.0)
             edge = 80 + 560 * p - self.drop_d
-            a = smoothstep(-10, 60, edge) * 0.07 * self.drop_gran
+            a = smoothstep(-10, 60, edge) * 0.035 * self.drop_gran
             img *= 1 - a[..., None] * (1 - np.array([0.5, 0.56, 0.55], np.float32))
 
         canvas = Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8), "RGB").convert("RGBA")
@@ -920,7 +920,7 @@ class Scene:
         # 따뜻한 빛 번짐이 화면을 천천히 가로지른다 (screen 합성)
         gx = int(W * (0.15 + 0.6 * sstep(0, DUR, t)) )
         gy = int(H * (0.25 + 0.15 * math.sin(t * 0.2)))
-        g = self.glow[H - gy:2 * H - gy, W - gx:2 * W - gx] * (0.10 + 0.05 * math.sin(t * 0.5))
+        g = self.glow[H - gy:2 * H - gy, W - gx:2 * W - gx] * (0.14 + 0.05 * math.sin(t * 0.5))
         o = np.asarray(out, np.float32) / 255
         o = 1 - (1 - o) * (1 - g[..., None] * self.glow_col)
         out = Image.fromarray((np.clip(o, 0, 1) * 255).astype(np.uint8), "RGB")
