@@ -46,8 +46,13 @@ python3 render.py --fonts <폰트폴더> --out out.mp4 --preview 5,12,26   # 스
 
 폰트: 한글 Noto Serif KR(Regular/Bold/Black, 명조), 영문 Playfair Display Italic(Bold/Medium) (Google Fonts)
 
-## 모던 버전 (현재 `sinkil_365_christmas_newyear.mp4`)
+## 모던 버전 (`sinkil_365_christmas_newyear_modern.mp4`)
 - 스크립트: `render_modern.py` — `render_city.py`의 문구·음악·타이밍을 그대로 쓰고 화면만 현대적으로 변경
 - 흐르는 파스텔 메시 그라디언트 + 필름 그레인, 반투명 흰색 유리 스카이라인
 - 탄성 있게 튀어나오며(wobble) 떠다니는 3D 구·링·반짝이
 - 글래스모피즘 카드 위 문구, 유리 원 카운트다운, 선·점 스타버스트 불꽃
+
+## 밤 야경 + 빛의 눈꽃 버전 (현재 `sinkil_365_christmas_newyear.mp4`)
+- 스크립트: `render_night.py` — 밤 도시 야경, 이탤릭 영문 + 명조 한글
+- 크리스마스 트리 대신 밤하늘에 금빛 선으로 그려지는 눈꽃 결정: 여섯 갈래가 자라고 가지가 돋아난 뒤
+  중심 육각형과 푸른 안쪽 결정이 완성되고, 천천히 회전하며 빛이 결을 따라 흐름
