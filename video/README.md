@@ -45,3 +45,9 @@ python3 render.py --fonts <폰트폴더> --out out.mp4 --preview 5,12,26   # 스
 | 52–60초 | 유리 패널 엔딩 | Merry Christmas & Happy New Year · 신길튼튼365정형외과 · 주소 · 임직원 일동 |
 
 폰트: 한글 Noto Serif KR(Regular/Bold/Black, 명조), 영문 Playfair Display Italic(Bold/Medium) (Google Fonts)
+
+## 모던 버전 (현재 `sinkil_365_christmas_newyear.mp4`)
+- 스크립트: `render_modern.py` — `render_city.py`의 문구·음악·타이밍을 그대로 쓰고 화면만 현대적으로 변경
+- 흐르는 파스텔 메시 그라디언트 + 필름 그레인, 반투명 흰색 유리 스카이라인
+- 탄성 있게 튀어나오며(wobble) 떠다니는 3D 구·링·반짝이
+- 글래스모피즘 카드 위 문구, 유리 원 카운트다운, 선·점 스타버스트 불꽃
