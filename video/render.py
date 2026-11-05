@@ -130,21 +130,28 @@ class Layer:
         al = Image.new("L", (Ws, Hs), 0)
         tm = Image.new("F", (Ws, Hs), 999.0)
         dr, da, dt = ImageDraw.Draw(rgb), ImageDraw.Draw(al), ImageDraw.Draw(tm)
+        tc = getattr(self, "true_color", False)
+        if tc:  # 색 정규화를 위한 실제 커버리지 (알파와 분리)
+            cv = Image.new("L", (Ws, Hs), 0)
+            dcv = ImageDraw.Draw(cv)
         # 늦은 것부터 그리면 겹치는 곳은 가장 이른 시각이 남는다
         for t, kind, d in sorted(self.dabs, key=lambda q: -q[0]):
             if kind == 0:
                 x, y, r, col, a = d
                 bb = [(x + M - r) * SS, (y + M - r) * SS, (x + M + r) * SS, (y + M + r) * SS]
                 dr.ellipse(bb, fill=col); da.ellipse(bb, fill=int(a * 255)); dt.ellipse(bb, fill=float(t))
+                if tc: dcv.ellipse(bb, fill=255)
             elif kind == 1:
                 pts, col, a = d
                 p = [((px + M) * SS, (py + M) * SS) for px, py in pts]
                 dr.polygon(p, fill=col); da.polygon(p, fill=int(a * 255)); dt.polygon(p, fill=float(t))
+                if tc: dcv.polygon(p, fill=255)
             else:
                 pts, col, a, w = d
                 p = [((px + M) * SS, (py + M) * SS) for px, py in pts]
                 ww = max(1, int(w * SS))
                 dr.line(p, fill=col, width=ww); da.line(p, fill=int(a * 255), width=ww); dt.line(p, fill=float(t), width=ww)
+                if tc: dcv.line(p, fill=255, width=ww)
         # 다운샘플 (안티에일리어싱)
         rgb = np.asarray(rgb.resize((W, H), Image.BOX), np.float32) / 255
         a = np.asarray(al.resize((W, H), Image.BOX), np.float32) / 255
@@ -155,7 +162,7 @@ class Layer:
         a = a * np.clip(1 - dry * (tex - 0.35) * 1.6 - 0.18 * (grain - 0.5), 0.25, 1.15)
         a = np.clip(a, 0, 1)
         # 색 정규화 (premultiplied 해제)
-        cov = np.asarray(al.resize((W, H), Image.BOX), np.float32)[..., None] / 255
+        cov = np.asarray((cv if tc else al).resize((W, H), Image.BOX), np.float32)[..., None] / 255
         # rgb 는 커버리지가 낮은 곳에서 검정과 섞였으므로 보정
         rgb = np.where(cov > 0.02, rgb / np.maximum(cov, 1e-3) * (cov > 0) , rgb)
         rgb = np.clip(rgb, 0, 1)
