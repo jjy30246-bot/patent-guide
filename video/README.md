@@ -25,3 +25,23 @@ python3 render.py --fonts <폰트폴더> --out out.mp4          # 전체 영상
 python3 render.py --fonts <폰트폴더> --out out.mp4 --preview 5,12,26   # 스틸 미리보기
 ```
 폰트 폴더에는 Google Fonts의 `GowunBatang-Bold.ttf`, `GowunBatang-Regular.ttf`, `Myeongjo-EB.ttf`(나눔명조 ExtraBold), `Brush.ttf`(나눔손글씨 붓)를 두면 됩니다. 필요 패키지: numpy, Pillow, ffmpeg.
+
+---
+
+# 메리 크리스마스 & 해피 뉴 이어 (도시 감성 모던 버전)
+
+- 파일: `sinkil_365_christmas_newyear.mp4` (1920×1080, 30fps, 60초, 경쾌한 배경음악 직접 합성)
+- 스크립트: `render_city.py` (`render.py`의 문자 렌더링·악기 함수 재사용)
+
+| 시간 | 장면 | 문구 |
+|---|---|---|
+| 0–4초 | 밤의 도시가 솟아오르고 창문 불빛이 물결처럼 켜짐 | |
+| 4–12초 | 눈, 빛 점으로 쌓이는 트리 + 별 | MERRY CHRISTMAS / 행복이 가득한 크리스마스 되세요 |
+| 12–20초 | 줄 전구, 선물상자, 별똥별 | 따뜻하고 포근한 성탄절 / 사랑하는 사람들과 웃음 가득한 하루 보내세요 |
+| 20–27초 | 컨페티 | 올 한 해 신길튼튼365정형외과와 함께해 주셔서 진심으로 감사합니다 / 여러분의 건강한 웃음이 저희의 가장 큰 기쁨입니다 |
+| 28–33초 | 카운트다운 5·4·3·2·1 | |
+| 33–44초 | 불꽃놀이, 컨페티 폭발 | HAPPY NEW YEAR 2027 / 새해 복 많이 받으세요 |
+| 44–52초 | 일출, 구름, 새 | 2027년, 늘 건강하고 행복한 한 해 되세요 / 더 친절하게, 더 튼튼하게 곁에 있겠습니다 |
+| 52–60초 | 유리 패널 엔딩 | Merry Christmas & Happy New Year · 신길튼튼365정형외과 · 주소 · 임직원 일동 |
+
+폰트: Noto Sans KR(Regular/Bold/Black), Montserrat ExtraBold, Great Vibes (Google Fonts)
