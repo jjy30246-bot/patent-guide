@@ -351,7 +351,8 @@ class Scene:
                     c = MINT
                 self.tree.append(dict(x=xv, y=yv, c=c, t=4.6 + row * 0.11 + abs(i - n / 2) * 0.012,
                                       ph=r.random() * math.tau, s=2.2 + r.random() * 1.6))
-        self.tree_star = dict(x=cx, y=top - 34, t=4.6 + R * 0.11 + 0.25)
+        self.tree = []  # 트리 없음
+        self.tree_star = dict(x=cx, y=top - 34, t=1e9)
         self.star_img = star_sprite(36, GOLD)
         self.tree_cx = cx
         # 줄 전구
@@ -368,7 +369,7 @@ class Scene:
         # 선물상자
         gifts = [(1090, 110, CORAL, GOLD), (1215, 84, MINT, WHITE), (1340, 128, GOLD, CORAL),
                  (1630, 96, PINK, WHITE), (1750, 120, SKY, GOLD), (1470, 70, CORAL, MINT)]
-        self.gifts = [dict(x=x, w=w, img=gift_sprite(w, w * 0.85, c, rb), t=13.0 + i * 0.16) for i, (x, w, c, rb) in enumerate(gifts)]
+        self.gifts = [dict(x=x - 460, w=w, img=gift_sprite(w, w * 0.85, c, rb), t=13.0 + i * 0.16) for i, (x, w, c, rb) in enumerate(gifts)]
         # 꽃가루(컨페티)
         cols = [CORAL, MINT, GOLD, PINK, SKY, WHITE]
         self.confetti = []
@@ -424,7 +425,7 @@ class Scene:
 
     def build_texts(self):
         T = []
-        rx = 1260
+        rx = 960
         # 크리스마스
         T.append(KText(self.T([("Merry", WHITE)], "mont", 140, 2), rx, 350, 5.0, 12.0, mode="pop", stagger=0.07, d_in=0.55))
         T.append(KText(self.T([("Christmas", GOLD)], "mont", 140, 2), rx, 490, 5.5, 12.1, mode="pop", stagger=0.06, d_in=0.55,
