@@ -22,6 +22,8 @@ FPS = 30
 DUR = 30.0
 NFRAMES = int(FPS * DUR)
 SS = 2  # 회화 레이어 슈퍼샘플링 배율
+LM = 60  # 회화 레이어 여백 (시차 이동용)
+W0_, H0_ = 1920, 1080
 
 rng = np.random.default_rng(365)
 
@@ -118,6 +120,11 @@ class Layer:
         self.dabs.append((t, 2, (pts, col, a, w)))
 
     def rasterize(self, texture_seed, dry=0.35, bleed_r=10, bleed_a=0.35):
+        return self._rasterize(texture_seed, dry, bleed_r, bleed_a)
+
+    def _rasterize(self, texture_seed, dry, bleed_r, bleed_a):
+        M = LM
+        W, H = W0_ + 2 * M, H0_ + 2 * M
         Ws, Hs = W * SS, H * SS
         rgb = Image.new("RGB", (Ws, Hs), (0, 0, 0))
         al = Image.new("L", (Ws, Hs), 0)
@@ -127,15 +134,15 @@ class Layer:
         for t, kind, d in sorted(self.dabs, key=lambda q: -q[0]):
             if kind == 0:
                 x, y, r, col, a = d
-                bb = [(x - r) * SS, (y - r) * SS, (x + r) * SS, (y + r) * SS]
+                bb = [(x + M - r) * SS, (y + M - r) * SS, (x + M + r) * SS, (y + M + r) * SS]
                 dr.ellipse(bb, fill=col); da.ellipse(bb, fill=int(a * 255)); dt.ellipse(bb, fill=float(t))
             elif kind == 1:
                 pts, col, a = d
-                p = [(px * SS, py * SS) for px, py in pts]
+                p = [((px + M) * SS, (py + M) * SS) for px, py in pts]
                 dr.polygon(p, fill=col); da.polygon(p, fill=int(a * 255)); dt.polygon(p, fill=float(t))
             else:
                 pts, col, a, w = d
-                p = [(px * SS, py * SS) for px, py in pts]
+                p = [((px + M) * SS, (py + M) * SS) for px, py in pts]
                 ww = max(1, int(w * SS))
                 dr.line(p, fill=col, width=ww); da.line(p, fill=int(a * 255), width=ww); dt.line(p, fill=float(t), width=ww)
         # 다운샘플 (안티에일리어싱)
@@ -187,21 +194,28 @@ class Layer:
         self.tmax = float(fin.max()) if fin.size else 0
         self.tmin = float(fin.min()) if fin.size else 0
 
-    def apply(self, img, t):
+    def apply(self, img, t, dx=0, dy=0):
         if self.bbox is None or t < self.tmin - 0.1:
             return
         y0, y1, x0, x1 = self.bbox
-        sub = img[y0:y1, x0:x1]
-        dt = t - self.T
+        # 시차(parallax) 이동: 레이어 좌표 -> 화면 좌표
+        Y0, X0 = y0 - LM + dy, x0 - LM + dx
+        sy0, sx0 = max(0, -Y0), max(0, -X0)
+        sy1, sx1 = min(y1 - y0, H - Y0), min(x1 - x0, W - X0)
+        if sy1 <= sy0 or sx1 <= sx0:
+            return
+        cs = (slice(sy0, sy1), slice(sx0, sx1))
+        sub = img[Y0 + sy0:Y0 + sy1, X0 + sx0:X0 + sx1]
+        dt = t - self.T[cs]
         reveal = smoothstep(0.0, 0.14, dt)
         wet = 1 + 0.35 * np.exp(-np.clip(dt, 0, None) / 0.35) * (dt > 0)
-        a = np.clip(self.a * reveal * wet, 0, 1)
+        a = np.clip(self.a[cs] * reveal * wet, 0, 1)
         # 번짐: 빠르게 퍼졌다가 옅게 남는다
-        dd = t - self.Td
-        bl = self.bleed * smoothstep(0.0, 0.5, dd) * (0.45 + 0.55 * np.exp(-np.clip(dd, 0, None) / 1.1))
+        dd = t - self.Td[cs]
+        bl = self.bleed[cs] * smoothstep(0.0, 0.5, dd) * (0.45 + 0.55 * np.exp(-np.clip(dd, 0, None) / 1.1))
         # 먹은 종이에 곱해진다 (multiply)
-        sub *= 1 - bl[..., None] * (1 - self.rgbb)
-        sub *= 1 - a[..., None] * (1 - self.rgb)
+        sub *= 1 - bl[..., None] * (1 - self.rgbb[cs])
+        sub *= 1 - a[..., None] * (1 - self.rgb[cs])
 
 
 # ---------------------------------------------------------------- 홍매화
@@ -558,6 +572,7 @@ class Fonts:
 DARK = (40, 34, 32)
 RED = (178, 30, 56)
 TEALT = (24, 92, 88)
+GOLD = (158, 118, 48)
 
 
 def render_line(fonts, segs, font, size, spacing=0):
@@ -572,52 +587,92 @@ def render_line(fonts, segs, font, size, spacing=0):
     im = Image.new("RGBA", (int(total + pad * 2), asc + desc + pad * 2), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     x = pad
+    boxes = []
     for txt, col in segs:
         for ch in txt:
             d.text((x, pad), ch, font=f, fill=col + (255,))
-            x += f.getlength(ch) + spacing
-    return im
+            adv = f.getlength(ch) + spacing
+            if ch.strip():
+                cp = int(pad * 0.5)
+                ci = Image.new("RGBA", (int(adv + 2 * cp), im.size[1]), (0, 0, 0, 0))
+                ImageDraw.Draw(ci).text((cp, pad), ch, font=f, fill=col + (255,))
+                boxes.append((int(x) - cp, ci))
+            x += adv
+    return im, boxes
 
 
 class TextItem:
-    def __init__(self, img, cx, cy, t_in, t_out, d_in=1.1, d_out=0.8, wipe=True, rise=16):
+    """글자 단위로 시차를 두고 떠오르는(블러→선명, 아래→위) 문구."""
+    BLURS = (0.0, 1.5, 3.0, 5.0, 7.5)
+
+    def __init__(self, img, cx, cy, t_in, t_out, d_in=0.9, d_out=0.8, wipe=True, rise=16, stagger=None,
+                 shimmer=()):
+        img, boxes = img
         self.img = img
         self.cx, self.cy = cx, cy
         self.t_in, self.t_out = t_in, t_out
         self.d_in, self.d_out = d_in, d_out
-        self.wipe = wipe
         self.rise = rise
-        arr = np.asarray(img, np.float32)
-        self.alpha = arr[..., 3] / 255
         self.w, self.h = img.size
-        xs = np.linspace(0, 1, self.w, dtype=np.float32)
-        self.xs = xs[None, :]
+        n = max(1, len(boxes))
+        self.stagger = stagger if stagger is not None else min(0.06, 1.1 / n)
+        self.shimmer = shimmer
+        self.chars = []
+        for (a, crop) in boxes:
+            levels = [crop if r == 0 else crop.filter(ImageFilter.GaussianBlur(r)) for r in self.BLURS]
+            self.chars.append((a, levels))
+        # 글자 영역이 겹치므로, 완전히 나타난 뒤에는 원본 한 장으로 그린다
+        self.full_levels = [img if r == 0 else img.filter(ImageFilter.GaussianBlur(r)) for r in self.BLURS]
+        self.alpha_full = np.asarray(img)[..., 3].astype(np.float32) / 255
+        self.xs = np.arange(self.w, dtype=np.float32)[None, :]
+
+    def end_in(self):
+        return self.t_in + self.stagger * (len(self.chars) - 1) + self.d_in
+
+    @staticmethod
+    def _pick(levels, blur):
+        k = min(range(len(TextItem.BLURS)), key=lambda q: abs(TextItem.BLURS[q] - blur))
+        return levels[k]
+
+    @staticmethod
+    def _fade(im, a):
+        if a >= 0.999:
+            return im
+        arr = np.asarray(im).copy()
+        arr[..., 3] = (arr[..., 3].astype(np.float32) * a).astype(np.uint8)
+        return Image.fromarray(arr, "RGBA")
 
     def draw(self, canvas, t):
         if t < self.t_in or t > self.t_out + self.d_out:
             return
-        pin = (t - self.t_in) / self.d_in
-        pout = (t - self.t_out) / self.d_out
-        a = ease_out_cubic(pin) * (1 - sstep(0, 1, pout))
-        if a <= 0.002:
+        ox, oy = int(self.cx - self.w / 2), int(self.cy - self.h / 2)
+        pout = sstep(0, 1, (t - self.t_out) / self.d_out)
+        if t < self.end_in():
+            for i, (a, levels) in enumerate(self.chars):
+                p = (t - self.t_in - i * self.stagger) / self.d_in
+                if p <= 0:
+                    continue
+                e = ease_out_cubic(p)
+                im = self._fade(self._pick(levels, 7.5 * (1 - e)), e)
+                canvas.alpha_composite(im, (ox + a, oy + int(self.rise * (1 - e))))
             return
-        blur = 7 * (1 - ease_out_cubic(pin)) + 6 * sstep(0, 1, pout)
-        dy = self.rise * (1 - ease_out_cubic(pin)) - 10 * sstep(0, 1, pout)
-        im = self.img
-        if self.wipe and pin < 1.3:
-            # 붓으로 쓸어내듯 왼쪽→오른쪽으로 드러남 (부드러운 경계)
-            front = -0.25 + 1.6 * ease_out_cubic(pin / 1.2)
-            m = np.clip((front - self.xs) / 0.25, 0, 1)
-            arr = np.asarray(im).copy()
-            arr[..., 3] = (arr[..., 3] * m).astype(np.uint8)
-            im = Image.fromarray(arr, "RGBA")
-        if blur > 0.3:
-            im = im.filter(ImageFilter.GaussianBlur(blur))
-        if a < 0.999:
-            arr = np.asarray(im).copy()
-            arr[..., 3] = (arr[..., 3].astype(np.float32) * a).astype(np.uint8)
-            im = Image.fromarray(arr, "RGBA")
-        canvas.alpha_composite(im, (int(self.cx - self.w / 2), int(self.cy - self.h / 2 + dy)))
+        im = self._pick(self.full_levels, 6 * pout)
+        # 금빛 광택이 글자 위를 지나간다
+        for (ts, dur) in self.shimmer:
+            if ts <= t <= ts + dur:
+                q = (t - ts) / dur
+                band_x = -0.2 * self.w + 1.4 * self.w * ease_out_cubic(q) if False else -0.25 * self.w + 1.5 * self.w * q
+                g = np.exp(-((self.xs - band_x) / (self.w * 0.07)) ** 2) * 0.85
+                arr = np.asarray(im).astype(np.float32)
+                gold = np.array([226, 186, 110], np.float32)
+                hi = np.array([255, 240, 200], np.float32)
+                g3 = g[..., None]
+                core = np.exp(-((self.xs - band_x) / (self.w * 0.018)) ** 2)[..., None] * 0.7
+                arr[..., :3] = arr[..., :3] * (1 - g3) + gold * g3
+                arr[..., :3] = arr[..., :3] * (1 - core) + hi * core
+                im = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGBA")
+        im = self._fade(im, 1 - pout)
+        canvas.alpha_composite(im, (ox, oy - int(10 * pout)))
 
 
 def make_seal(fonts, size):
@@ -656,11 +711,11 @@ def build_texts(fonts):
     T.append(TextItem(render_line(fonts, [("더 넓어진 공간, 더 편안한 진료", DARK)], "body", 58, 2), cx, 475, 15.5, 21.0))
     T.append(TextItem(render_line(fonts, [("한결같은 마음으로 여러분의 건강을 지키겠습니다", DARK)], "reg", 44, 1), cx, 570, 16.1, 21.1))
     # 4. 엔딩
-    T.append(TextItem(render_line(fonts, [("2026. 01  확 장 이 전", RED)], "body", 36, 8), cx, 335, 21.9, 40, wipe=False, rise=10))
-    T.append(TextItem(render_line(fonts, [("신길튼튼365정형외과", DARK)], "title", 100, 3), cx, 440, 22.3, 40, d_in=1.5, rise=22))
+    T.append(TextItem(render_line(fonts, [("2026. 01  확 장 이 전", GOLD)], "body", 34, 10), cx, 335, 21.9, 40, rise=10))
+    T.append(TextItem(render_line(fonts, [("신길튼튼365정형외과", DARK)], "title", 100, 3), cx, 440, 22.3, 40, d_in=1.1, rise=26, stagger=0.09, shimmer=((24.9, 1.5), (27.6, 1.3))))
     T.append(TextItem(render_line(fonts, [("서울특별시 영등포구 가마산로 483  3A01호~3A05호", TEALT)], "body", 40, 1), cx, 578, 23.3, 40))
     T.append(TextItem(render_line(fonts, [("그동안 보내주신 성원에 깊이 감사드립니다", DARK)], "reg", 40, 2), cx, 652, 24.0, 40))
-    T.append(TextItem(render_line(fonts, [("감사합니다", RED)], "brush", 84, 2), cx, 748, 25.3, 40, d_in=1.4))
+    T.append(TextItem(render_line(fonts, [("감사합니다", RED)], "brush", 84, 2), cx, 748, 25.3, 40, d_in=1.0, stagger=0.16))
     return T
 
 
@@ -684,8 +739,54 @@ class Scene:
         # 엔딩 장식선
         self.rule = Image.new("RGBA", (420, 6), (0, 0, 0, 0))
         dd = ImageDraw.Draw(self.rule)
-        dd.line([(0, 3), (420, 3)], fill=(150, 120, 100, 200), width=2)
+        dd.line([(0, 3), (420, 3)], fill=(176, 138, 66, 210), width=2)
+        # 흐르는 안개
+        mist = fbm(W + 900, H, 260, 4, 909)
+        yy = np.arange(H, dtype=np.float32)[:, None]
+        band = np.exp(-((yy - 860) / 150) ** 2) * 0.9 + np.exp(-((yy - 120) / 120) ** 2) * 0.35
+        self.mist = (smoothstep(0.42, 0.78, mist) * band).astype(np.float32)
+        self.mist_col = np.array([0.985, 0.975, 0.955], np.float32)
+        # 따뜻한 빛 번짐 (light leak)
+        gy, gx = np.mgrid[0:H * 2:2, 0:W * 2:2].astype(np.float32)
+        gl = np.exp(-(((gx - W) / 900) ** 2 + ((gy - H) / 620) ** 2))
+        self.glow = Image.fromarray((gl * 255).astype(np.uint8), "L").resize((W * 2, H * 2), Image.BILINEAR)
+        self.glow = np.asarray(self.glow, np.float32) / 255
+        self.glow_col = np.array([1.0, 0.86, 0.66], np.float32)
+        # 금빛 먼지
+        r = np.random.default_rng(1234)
+        self.dust = [dict(x=r.random() * W, y=r.random() * H, vy=-(6 + r.random() * 16), vx=(r.random() - 0.5) * 8,
+                          amp=8 + r.random() * 20, fr=0.1 + r.random() * 0.25, ph=r.random() * math.tau,
+                          tw=0.6 + r.random() * 1.6, size=r.integers(0, 3), t0=0.8 + r.random() * 6,
+                          late=r.random() < 0.4) for _ in range(90)]
+        self.dust_spr = []
+        for sz in (7, 11, 17):
+            g = np.mgrid[0:sz, 0:sz].astype(np.float32) - (sz - 1) / 2
+            rr = np.hypot(g[0], g[1]) / (sz / 2)
+            al = np.clip(np.exp(-rr ** 2 * 4) + 0.9 * np.exp(-rr ** 2 * 30), 0, 1)
+            arr = np.zeros((sz, sz, 4), np.uint8)
+            arr[..., 0], arr[..., 1], arr[..., 2] = 232, 196, 120
+            arr[..., 3] = (al * 255).astype(np.uint8)
+            self.dust_spr.append(arr)
         print(f"매화 꽃 {len(self.blossoms)}송이, 꽃잎 {len(self.petals)}장", flush=True)
+
+    def frame_overlay(self, t):
+        """모서리에서 시작해 그려지는 이중 금선 테두리."""
+        ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(ov)
+        p = ease_out_cubic((t - 21.3) / 2.2)
+        a = int(200 * sstep(21.3, 22.0, t))
+        for inset, wd, al in ((44, 2, 1.0), (56, 1, 0.7)):
+            x0, y0, x1, y1 = inset, inset, W - inset, H - inset
+            hx, hy = (x1 - x0) / 2 * p, (y1 - y0) / 2 * p
+            col = (176, 138, 66, int(a * al))
+            for (cx, cy, sx, sy) in ((x0, y0, 1, 1), (x1, y0, -1, 1), (x0, y1, 1, -1), (x1, y1, -1, -1)):
+                d.line([(cx, cy), (cx + sx * hx, cy)], fill=col, width=wd)
+                d.line([(cx, cy), (cx, cy + sy * hy)], fill=col, width=wd)
+        # 모서리 마름모 장식
+        r = 7 * p
+        for (cx, cy) in ((50, 50), (W - 50, 50), (50, H - 50), (W - 50, H - 50)):
+            d.polygon([(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)], fill=(186, 146, 70, a))
+        return ov
 
     def frame(self, t):
         img = self.paper.copy()
@@ -693,6 +794,10 @@ class Scene:
         for a, col, T in self.mountains:
             m = a * smoothstep(0, 1.6, t - T)
             img *= 1 - m[..., None] * (1 - col)
+        # 흐르는 안개 (오른쪽에서 왼쪽으로)
+        off = int(18 * t) % 900
+        m = self.mist[:, off:off + W] * (0.55 * sstep(0.5, 4.0, t))
+        img += (self.mist_col - img) * m[..., None] * 0.6
         # 먹물 방울: 화면 중앙에서 번졌다가 옅어짐
         if 0.3 < t < 9.5:
             p = ease_out_cubic((t - 0.35) / 2.6)
@@ -705,8 +810,10 @@ class Scene:
             ink = np.array([0.16, 0.15, 0.16], np.float32)
             img *= 1 - a[..., None] * (1 - ink)
         # 매화 가지, 대나무
-        self.plum.apply(img, t)
-        self.bamboo.apply(img, t)
+        pd = sstep(0, DUR, t)
+        pdx, pdy = int(round(34 * pd)), int(round(12 * pd))
+        self.plum.apply(img, t, pdx, pdy)
+        self.bamboo.apply(img, t, int(round(-30 * pd)), int(round(-6 * pd)))
         # 엔딩: 제목 뒤 옅은 먹 번짐
         if t > 21.4:
             p = ease_out_cubic((t - 21.4) / 3.0)
@@ -735,7 +842,7 @@ class Scene:
                 arr = np.asarray(im).copy()
                 arr[..., 3] = (arr[..., 3] * min(1, k * 2.5)).astype(np.uint8)
                 im = Image.fromarray(arr, "RGBA")
-            canvas.alpha_composite(im, (int(b["x"] - im.size[0] / 2), int(b["y"] - im.size[1] / 2)))
+            canvas.alpha_composite(im, (int(b["x"] + pdx - im.size[0] / 2), int(b["y"] + pdy - im.size[1] / 2)))
 
         # 카메라: 아주 느린 줌 인 + 미세한 패닝
         z = 1.02 + 0.045 * sstep(0, DUR, t)
@@ -769,6 +876,21 @@ class Scene:
                 im = Image.fromarray(arr, "RGBA")
             canvas.alpha_composite(im, (int(x - im.size[0] / 2), int(y - im.size[1] / 2)))
 
+        # 금빛 먼지: 천천히 떠오르며 반짝인다
+        for d in self.dust:
+            if t < d["t0"] or (d["late"] and t < 20.5):
+                continue
+            tt = t - (20.5 if d["late"] else d["t0"])
+            x = (d["x"] + d["vx"] * tt + d["amp"] * math.sin(d["fr"] * math.tau * tt + d["ph"])) % W
+            y = (d["y"] + d["vy"] * tt) % H
+            a = sstep(0, 1.5, tt) * (0.25 + 0.75 * math.sin(d["tw"] * tt + d["ph"]) ** 2)
+            arr = self.dust_spr[d["size"]].copy()
+            arr[..., 3] = (arr[..., 3] * a * 0.85).astype(np.uint8)
+            im = Image.fromarray(arr, "RGBA")
+            canvas.alpha_composite(im, (int(x), int(y)))
+        # 금박 테두리 (엔딩)
+        if t > 21.3:
+            canvas.alpha_composite(self.frame_overlay(t))
         # 문구
         for ti in self.texts:
             ti.draw(canvas, t)
@@ -795,6 +917,13 @@ class Scene:
             canvas.alpha_composite(im, (int(sx_ - im.size[0] / 2), int(446 - im.size[1] / 2)))
 
         out = canvas.convert("RGB")
+        # 따뜻한 빛 번짐이 화면을 천천히 가로지른다 (screen 합성)
+        gx = int(W * (0.15 + 0.6 * sstep(0, DUR, t)) )
+        gy = int(H * (0.25 + 0.15 * math.sin(t * 0.2)))
+        g = self.glow[H - gy:2 * H - gy, W - gx:2 * W - gx] * (0.10 + 0.05 * math.sin(t * 0.5))
+        o = np.asarray(out, np.float32) / 255
+        o = 1 - (1 - o) * (1 - g[..., None] * self.glow_col)
+        out = Image.fromarray((np.clip(o, 0, 1) * 255).astype(np.uint8), "RGB")
         # 페이드 인/아웃
         f_in = sstep(0, 0.8, t)
         f_out = 1 - sstep(DUR - 1.4, DUR - 0.05, t)
