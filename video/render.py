@@ -651,14 +651,16 @@ def build_texts(fonts):
     # 2. 확장 이전
     T.append(TextItem(render_line(fonts, [("신길튼튼365정형외과", TEALT), ("가", DARK)], "body", 62, 2), cx, 470, 9.3, 14.8))
     T.append(TextItem(render_line(fonts, [("새로운 공간으로 ", DARK), ("확장 이전", RED), ("합니다", DARK)], "body", 60, 2), cx, 575, 9.9, 14.9))
+    T.append(TextItem(render_line(fonts, [("2026년 1월 · 영등포구 가마산로 483", TEALT)], "reg", 38, 2), cx, 668, 10.8, 15.0, rise=10))
     # 3. 다짐
     T.append(TextItem(render_line(fonts, [("더 넓어진 공간, 더 편안한 진료", DARK)], "body", 58, 2), cx, 475, 15.5, 21.0))
     T.append(TextItem(render_line(fonts, [("한결같은 마음으로 여러분의 건강을 지키겠습니다", DARK)], "reg", 44, 1), cx, 570, 16.1, 21.1))
     # 4. 엔딩
-    T.append(TextItem(render_line(fonts, [("확 장 이 전", RED)], "body", 36, 14), cx, 360, 21.9, 40, wipe=False, rise=10))
-    T.append(TextItem(render_line(fonts, [("신길튼튼365정형외과", DARK)], "title", 100, 3), cx, 472, 22.3, 40, d_in=1.5, rise=22))
-    T.append(TextItem(render_line(fonts, [("그동안 보내주신 성원에 깊이 감사드립니다", DARK)], "reg", 44, 2), cx, 620, 23.6, 40))
-    T.append(TextItem(render_line(fonts, [("감사합니다", RED)], "brush", 92, 2), cx, 726, 25.0, 40, d_in=1.4))
+    T.append(TextItem(render_line(fonts, [("2026. 01  확 장 이 전", RED)], "body", 36, 8), cx, 335, 21.9, 40, wipe=False, rise=10))
+    T.append(TextItem(render_line(fonts, [("신길튼튼365정형외과", DARK)], "title", 100, 3), cx, 440, 22.3, 40, d_in=1.5, rise=22))
+    T.append(TextItem(render_line(fonts, [("서울특별시 영등포구 가마산로 483  3A01호~3A05호", TEALT)], "body", 40, 1), cx, 578, 23.3, 40))
+    T.append(TextItem(render_line(fonts, [("그동안 보내주신 성원에 깊이 감사드립니다", DARK)], "reg", 40, 2), cx, 652, 24.0, 40))
+    T.append(TextItem(render_line(fonts, [("감사합니다", RED)], "brush", 84, 2), cx, 748, 25.3, 40, d_in=1.4))
     return T
 
 
@@ -776,7 +778,7 @@ class Scene:
             rw = int(420 * p)
             if rw > 2:
                 r_ = self.rule.crop(((420 - rw) // 2, 0, (420 + rw) // 2, 6))
-                canvas.alpha_composite(r_, (int(W / 2 - rw / 2), 552))
+                canvas.alpha_composite(r_, (int(W / 2 - rw / 2), 516))
         if t > 24.3:
             k = (t - 24.3) / 0.45
             s = 1.6 - 0.6 * ease_out_cubic(k) if k < 1 else 1.0
@@ -788,9 +790,9 @@ class Scene:
             arr = np.asarray(im).copy()
             arr[..., 3] = (arr[..., 3] * a).astype(np.uint8)
             im = Image.fromarray(arr, "RGBA")
-            ti = self.texts[7]
+            ti = next(x for x in self.texts if x.t_in == 22.3)
             sx_ = W / 2 + (ti.w - 2 * int(100 * 0.6)) / 2 + 74
-            canvas.alpha_composite(im, (int(sx_ - im.size[0] / 2), int(478 - im.size[1] / 2)))
+            canvas.alpha_composite(im, (int(sx_ - im.size[0] / 2), int(446 - im.size[1] / 2)))
 
         out = canvas.convert("RGB")
         # 페이드 인/아웃
