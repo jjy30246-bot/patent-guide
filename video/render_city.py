@@ -6,7 +6,7 @@
 밤의 도시 → 빛으로 그려지는 트리 → 카운트다운 → 불꽃놀이 → 새해 일출 → 엔딩.
 
 사용:  python3 render_city.py --fonts <폰트폴더> --out <출력.mp4> [--preview 초,초,...]
-폰트:  NotoSansKR-{Regular,Bold,Black}.ttf, Montserrat-ExtraBold.ttf, GreatVibes.ttf
+폰트:  NotoSerifKR-{Regular,Bold,Black}.ttf, PlayfairDisplay-{BoldItalic,MediumItalic}.ttf
 """
 import argparse
 import math
@@ -63,11 +63,11 @@ def lerpc(c1, c2, k):
 class Fonts:
     def __init__(self, d):
         self.files = dict(
-            reg=os.path.join(d, "NotoSansKR-Regular.ttf"),
-            bold=os.path.join(d, "NotoSansKR-Bold.ttf"),
-            black=os.path.join(d, "NotoSansKR-Black.ttf"),
-            mont=os.path.join(d, "Montserrat-ExtraBold.ttf"),
-            script=os.path.join(d, "GreatVibes.ttf"),
+            reg=os.path.join(d, "NotoSerifKR-Regular.ttf"),     # 한글: 고급 명조(세리프)
+            bold=os.path.join(d, "NotoSerifKR-Bold.ttf"),
+            black=os.path.join(d, "NotoSerifKR-Black.ttf"),
+            mont=os.path.join(d, "PlayfairDisplay-BoldItalic.ttf"),    # 영문: 이탤릭
+            script=os.path.join(d, "PlayfairDisplay-MediumItalic.ttf"),
         )
 
     def get(self, which, size):
@@ -426,8 +426,8 @@ class Scene:
         T = []
         rx = 1260
         # 크리스마스
-        T.append(KText(self.T([("MERRY", WHITE)], "mont", 118, 10), rx, 360, 5.0, 12.0, mode="pop", stagger=0.07, d_in=0.55))
-        T.append(KText(self.T([("CHRISTMAS", GOLD)], "mont", 118, 8), rx, 490, 5.5, 12.1, mode="pop", stagger=0.06, d_in=0.55,
+        T.append(KText(self.T([("Merry", WHITE)], "mont", 140, 2), rx, 350, 5.0, 12.0, mode="pop", stagger=0.07, d_in=0.55))
+        T.append(KText(self.T([("Christmas", GOLD)], "mont", 140, 2), rx, 490, 5.5, 12.1, mode="pop", stagger=0.06, d_in=0.55,
                        shimmer=((8.5, 1.0),)))
         T.append(KText(self.T([("행복이 가득한 크리스마스 되세요", WHITE)], "bold", 44, 1), rx, 610, 7.0, 12.2))
         T.append(KText(self.T([("따뜻하고 포근한 ", WHITE), ("성탄절", CORAL)], "black", 66, 1), rx, 420, 12.8, 19.8, mode="pop", stagger=0.05))
@@ -436,8 +436,8 @@ class Scene:
         T.append(KText(self.T([("함께해 주셔서 진심으로 ", WHITE), ("감사합니다", GOLD)], "black", 54, 1), rx, 512, 21.0, 27.3, mode="pop", stagger=0.04))
         T.append(KText(self.T([("여러분의 건강한 웃음이 저희의 가장 큰 기쁨입니다", WHITE)], "bold", 36, 1), rx, 600, 22.2, 27.4))
         # 새해
-        T.append(KText(self.T([("HAPPY NEW YEAR", WHITE)], "mont", 112, 8), 960, 330, T_DROP + 0.25, 43.6, mode="pop", stagger=0.05, d_in=0.5))
-        T.append(KText(self.T([("2027", GOLD)], "mont", 230, 10), 960, 520, T_DROP - 0.02, 43.7, mode="pop", stagger=0.08, d_in=0.6,
+        T.append(KText(self.T([("Happy New Year", WHITE)], "mont", 124, 2), 960, 320, T_DROP + 0.25, 43.6, mode="pop", stagger=0.05, d_in=0.5))
+        T.append(KText(self.T([("2027", GOLD)], "mont", 240, 6), 960, 525, T_DROP - 0.02, 43.7, mode="pop", stagger=0.08, d_in=0.6,
                        shimmer=((36.0, 1.2), (40.5, 1.2))))
         T.append(KText(self.T([("새해 ", WHITE), ("복", CORAL), (" 많이 받으세요", WHITE)], "black", 72, 2), 960, 715, T_DROP + 1.6, 43.8, mode="pop", stagger=0.06))
         # 일출
@@ -446,7 +446,7 @@ class Scene:
                        960, 300, 45.2, 52.0, mode="pop", stagger=0.04))
         T.append(KText(lite(render_line(self.fonts, [("더 친절하게, 더 튼튼하게 곁에 있겠습니다", NAVY)], "bold", 40, 1)), 960, 395, 46.2, 52.1))
         # 엔딩 (유리 패널 위)
-        T.append(KText(render_line(self.fonts, [("Merry Christmas & Happy New Year", CORAL)], "script", 78, 0), 960, 395, T_END + 0.5, 99, d_in=0.8, stagger=0.025))
+        T.append(KText(render_line(self.fonts, [("Merry Christmas & Happy New Year", CORAL)], "script", 60, 1), 960, 400, T_END + 0.5, 99, d_in=0.8, stagger=0.025))
         T.append(KText(render_line(self.fonts, [("신길튼튼365정형외과", NAVY)], "black", 92, 1), 960, 515, T_END + 1.1, 99, mode="pop", stagger=0.05,
                        shimmer=((55.6, 1.2),)))
         T.append(KText(render_line(self.fonts, [("서울특별시 영등포구 가마산로 483  3A01호~3A05호", (70, 76, 120))], "reg", 32, 1), 960, 612, T_END + 2.0, 99))
